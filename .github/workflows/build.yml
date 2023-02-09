@@ -1,0 +1,102 @@
+---
+name: Build and Lint
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2019]
+        # os: [windows-2019, macos-latest, ]
+        # phpts: [ts, nts]
+        phpts: [nts, ts]
+        rust: [nightly]
+        php: ["8.1"]
+        clang: ["14"]
+        exclude:
+          # ext-php-rs requires nightly Rust when on Windows.
+          - os: windows-2019
+            rust: stable
+          # setup-php doesn't support thread safe PHP on Linux and macOS.
+          - os: macos-latest
+            phpts: ts
+          - os: ubuntu-latest
+            phpts: ts
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+        env:
+          phpts: ${{ matrix.phpts }}
+          debug: true
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      - run: rustup show
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        # Uncomment the following if statement if caching nightly deps
+        # ends up causing too much cache invalidation.
+        # if: matrix.rust == 'stable'
+        with:
+          # increment this manually to force cache eviction
+          prefix-key: "v0-rust"
+      # LLVM & Clang
+      - name: Cache LLVM and Clang
+        id: cache-llvm
+        uses: actions/cache@v3
+        #if: "!contains(matrix.os, 'windows')"
+        with:
+          path: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          key: ${{ matrix.os }}-llvm-${{ matrix.clang }}
+      - name: Setup LLVM & Clang
+        id: clang
+        uses: KyleMayes/install-llvm-action@v1
+        # if: "!contains(matrix.os, 'windows')"
+        with:
+          version: ${{ matrix.clang }}
+          directory: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+      - name: Configure Clang
+        # if: "!contains(matrix.os, 'windows')"
+        run: |
+          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+          echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
+      - name: Configure Clang (macOS only)
+        if: "contains(matrix.os, 'macos')"
+        run: echo "SDKROOT=$(xcrun --show-sdk-path)" >> $GITHUB_ENV
+      # Build
+      - name: Build
+        env:
+          EXT_PHP_RS_TEST: ""
+        run: cargo build --release --all-features --all -vvv
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts-${{ matrix.os }}-${{ matrix.php }}-${{ matrix.phpts }}
+          path: |
+              target/release/fluent.dll
+              target/release/libfluent.dylib
+              target/release/libfluent.so
+      # Test & lint
+      # - name: Test inline examples
+      #   run: cargo test --release --all --all-features
+      # - name: Run rustfmt
+      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest' && matrix.php == '8.2'
+      #   run: cargo fmt --all -- --check
+      # - name: Run clippy
+      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest' && matrix.php == '8.2'
+      #   run: cargo clippy --all -- -D warnings
