@@ -133,7 +133,7 @@ dependencies = [
  "cargo_metadata 0.15.3",
  "clap",
  "dialoguer",
- "ext-php-rs",
+ "ext-php-rs 0.9.0",
  "libloading",
  "semver",
 ]
@@ -440,6 +440,26 @@ dependencies = [
 
 [[package]]
 name = "ext-php-rs"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c877f41b1cd7db9ed8848e265700f5adeb961fc01f10749da49a39a466142338"
+dependencies = [
+ "anyhow",
+ "bindgen",
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "ext-php-rs-derive 0.9.0",
+ "native-tls",
+ "once_cell",
+ "parking_lot",
+ "skeptic",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "ext-php-rs"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "def7d5719d19e668640a49c8b6adc82d12c4beb7393ec315d1fe7b6d32d571e4"
@@ -449,13 +469,28 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
- "ext-php-rs-derive",
+ "ext-php-rs-derive 0.10.0",
  "native-tls",
  "once_cell",
  "parking_lot",
  "skeptic",
  "ureq",
  "zip",
+]
+
+[[package]]
+name = "ext-php-rs-derive"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f36daf5b76a4f68ddf4cc72dadcff7bd6298f164ee555e0a77866fd2c8c8a16"
+dependencies = [
+ "anyhow",
+ "darling",
+ "ident_case",
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -490,6 +525,18 @@ checksum = "a8a2db397cb1c8772f31494cb8917e48cd1e64f0fa7efac59fbd741a0a8ce841"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+]
+
+[[package]]
+name = "fluent"
+version = "0.1.0"
+dependencies = [
+ "cargo-php",
+ "ext-php-rs 0.10.0",
+ "fluent 0.16.0",
+ "fluent-bundle",
+ "lazy_static",
+ "unic-langid",
 ]
 
 [[package]]
@@ -701,18 +748,6 @@ name = "libc"
 version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
-
-[[package]]
-name = "libfluent"
-version = "0.1.0"
-dependencies = [
- "cargo-php",
- "ext-php-rs",
- "fluent",
- "fluent-bundle",
- "lazy_static",
- "unic-langid",
-]
 
 [[package]]
 name = "libloading"

@@ -1,18 +1,10 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
-use ext_php_rs::convert::{FromZval, IntoZval};
-use ext_php_rs::exception::PhpException;
-use ext_php_rs::flags::DataType;
-use ext_php_rs::prelude::*;
-use ext_php_rs::types::{ZendHashTable, Zval};
-use ext_php_rs::zend::ce;
+use ext_php_rs::types::ZendHashTable;
 use ext_php_rs::{
-    binary::Binary, info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
+    info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
 };
 
-use std::collections::HashMap;
-use std::ops::Deref;
-
-use fluent::{FluentArgs, FluentBundle, FluentMessage, FluentResource, FluentValue};
+use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use unic_langid::LanguageIdentifier;
 
 #[php_class(name = "FluentPHP\\FluentBundle")]
@@ -20,7 +12,7 @@ struct FluentPhpBundle {
     bundle: FluentBundle<FluentResource>,
 }
 
-#[php_impl(rename_methods = "none")]
+#[php_impl(rename_methods = "camelCase")]
 impl FluentPhpBundle {
     #[constructor]
     fn __construct(lang: String) -> PhpResult<Self> {
@@ -36,17 +28,17 @@ impl FluentPhpBundle {
     }
 
     #[php_method]
-    pub fn with_resource(&mut self, source: String) -> PhpResult<()> {
+    pub fn add_resource(&mut self, source: String) -> PhpResult<()> {
         // Initializing resource
         let resource = match FluentResource::try_new(source) {
             Ok(resource) => resource,
-            Err((_resource, _error)) => return Err("Failed to parse translation.".into()),
+            Err((_resource, _error)) => return Err(format!("{}", _error[0]).into())
         };
 
         let bundle = &mut self.bundle;
         match bundle.add_resource(resource) {
             Ok(_value) => Ok(()),
-            Err(_e) => return Err("Failed to load translation.".into()),
+            Err(_error) => return Err(format!("{}", _error[0]).into()),
         }
     }
 
