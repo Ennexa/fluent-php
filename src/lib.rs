@@ -1,5 +1,6 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
+use std::fmt::{Display, Formatter};
 use std::ops::Range;
 use ext_php_rs::types::ZendHashTable;
 use ext_php_rs::{
@@ -7,17 +8,34 @@ use ext_php_rs::{
 };
 
 use fluent::{FluentArgs, FluentBundle, FluentError, FluentResource, FluentValue};
+use fluent_syntax::parser::ParserError;
 use unic_langid::LanguageIdentifier;
 
-#[php_class(name = "FluentPHP\\Exception\\ParserException")]
-#[extends(ext_php_rs::zend::ce::exception())]
-#[derive(Default, Clone)]
-pub struct FluentPhpException {
-    errors: Vec<FluentError>
+enum FluentPhpError {
+    ParseError(Vec<FluentPhpParseError>),
+    Error(Vec<FluentError>)
 }
-impl From<FluentPhpException> for PhpException {
-    fn from(exception: FluentPhpException) -> Self {
-        let msg = format!("{}", &exception.errors[0]);
+
+impl FluentPhpError {
+    fn from_parse_error(resource: &FluentResource, errors: Vec<ParserError>) -> Self {
+        let errors = errors.into_iter()
+            .map(|err| FluentPhpParseError::new(resource, err))
+            .collect();
+
+        Self::ParseError(errors)
+    }
+
+    fn from_error(errors: Vec<FluentError>) -> Self {
+        Self::Error(errors)
+    }
+}
+
+impl From<FluentPhpError> for PhpException {
+    fn from(exception: FluentPhpError) -> Self {
+        let msg = match exception {
+            FluentPhpError::ParseError(err) => format!("{}", &err[0]),
+            FluentPhpError:: Error(err) => format!("{}", &err[0])
+        };
 
         PhpException::default(msg.into())
     }
@@ -45,6 +63,36 @@ struct FluentPhpBundle {
     bundle: FluentBundle<FluentResource>,
 }
 
+struct FluentPhpParseError {
+    line: u32,
+    col: usize,
+    source: String,
+    error: ParserError,
+}
+
+impl Display for FluentPhpParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} on line {}, col {}\n\n{}\n\n", self.error, self.line, self.col, self.source)
+    }
+}
+
+impl FluentPhpParseError {
+    fn new(resource: &FluentResource, error: ParserError) -> Self {
+        let source = resource.source();
+        let (line, col) = match line_offset_from_range(source, &error.pos) {
+            Some(val) => val,
+            None => (0, 0)
+        };
+
+        let slice = &error.slice;
+        let source = slice
+            .as_ref()
+            .map_or(String::new(), |range| source[range.start..range.end].to_owned());
+        Self { line, col, source, error }
+    }
+}
+
+
 #[php_impl(rename_methods = "camelCase")]
 impl FluentPhpBundle {
     #[constructor]
@@ -63,27 +111,17 @@ impl FluentPhpBundle {
     #[php_method]
     pub fn add_resource(&mut self, source: String) -> PhpResult<()> {
         // Initializing resource
-        let source_copy = String::from(&source);
         let resource = match FluentResource::try_new(source) {
             Ok(resource) => resource,
             Err((_resource, _error)) => {
-                let slice = _error[0].slice
-                    .as_ref()
-                    .map_or(String::new(), |range| {
-                        let line = line_offset_from_range(&source_copy, range)
-                            .map_or(String::new(), |(line, _)| format!(" on line {}", line));
-
-                       format!("{}\n\n{}\n\n", line, source_copy[range.start..range.end].to_owned())
-                    });
-
-                return Err(format!("{}{}", _error[0], slice).into())
+                return Err(FluentPhpError::from_parse_error(&_resource, _error).into())
             }
         };
 
         let bundle = &mut self.bundle;
         match bundle.add_resource(resource) {
             Ok(_value) => Ok(()),
-            Err(_error) => return Err(FluentPhpException{errors: _error}.into()),
+            Err(_error) => return Err(FluentPhpError::from_error(_error).into()),
         }
     }
 

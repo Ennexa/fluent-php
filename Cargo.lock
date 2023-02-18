@@ -133,7 +133,7 @@ dependencies = [
  "cargo_metadata 0.15.3",
  "clap",
  "dialoguer",
- "ext-php-rs 0.9.0",
+ "ext-php-rs",
  "libloading",
  "semver",
 ]
@@ -220,9 +220,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.4"
+version = "4.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+checksum = "ec0b0588d44d4d63a87dbd75c136c166bbfd9a86a31cb89e09906521c7d3f5e3"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -440,26 +440,6 @@ dependencies = [
 
 [[package]]
 name = "ext-php-rs"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c877f41b1cd7db9ed8848e265700f5adeb961fc01f10749da49a39a466142338"
-dependencies = [
- "anyhow",
- "bindgen",
- "bitflags",
- "cc",
- "cfg-if",
- "ext-php-rs-derive 0.9.0",
- "native-tls",
- "once_cell",
- "parking_lot",
- "skeptic",
- "ureq",
- "zip",
-]
-
-[[package]]
-name = "ext-php-rs"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "def7d5719d19e668640a49c8b6adc82d12c4beb7393ec315d1fe7b6d32d571e4"
@@ -469,28 +449,13 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
- "ext-php-rs-derive 0.10.0",
+ "ext-php-rs-derive",
  "native-tls",
  "once_cell",
  "parking_lot",
  "skeptic",
  "ureq",
  "zip",
-]
-
-[[package]]
-name = "ext-php-rs-derive"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f36daf5b76a4f68ddf4cc72dadcff7bd6298f164ee555e0a77866fd2c8c8a16"
-dependencies = [
- "anyhow",
- "darling",
- "ident_case",
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -510,9 +475,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a407cfaa3385c4ae6b23e84623d48c2798d06e3e6a1878f7f59f17b3f86499"
+checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
 dependencies = [
  "instant",
 ]
@@ -532,9 +497,10 @@ name = "fluent"
 version = "0.1.0"
 dependencies = [
  "cargo-php",
- "ext-php-rs 0.10.0",
+ "ext-php-rs",
  "fluent 0.16.0",
  "fluent-bundle",
+ "fluent-syntax",
  "lazy_static",
  "unic-langid",
 ]
@@ -637,9 +603,9 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "856b5cb0902c2b6d65d5fd97dfa30f9b70c7538e770b98eab5ed52d8db923e01"
+checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
 name = "hmac"
@@ -835,9 +801,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.17.0"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f61fba1741ea2b3d6a1e3178721804bb716a68a6aeba1149b5d52e3d464ea66"
+checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
 
 [[package]]
 name = "opaque-debug"
@@ -1168,9 +1134,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.92"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7434af0dc1cbd59268aa98b4c22c131c0584d2232f6fb166efb993e2832e896a"
+checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
  "itoa",
  "ryu",
@@ -1300,9 +1266,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.17"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a561bf4617eebd33bca6434b988f39ed798e527f51a1e797d0ee4f61c0a38376"
+checksum = "53250a3b3fed8ff8fd988587d8925d26a83ac3845d9e03b220b37f34c2b8d6c2"
 dependencies = [
  "serde",
  "time-core",
@@ -1650,9 +1616,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.6+zstd.1.5.2"
+version = "2.0.7+zstd.1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68a3f9792c0c3dc6c165840a75f47ae1f4da402c2d006881129579f6597e801b"
+checksum = "94509c3ba2fe55294d752b79842c530ccfab760192521df74a081a78d2b3c7f5"
 dependencies = [
  "cc",
  "libc",

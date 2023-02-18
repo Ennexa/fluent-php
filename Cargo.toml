@@ -17,6 +17,7 @@ cargo-php = "*"
 unic-langid = { version = "0.9", features = ["macros"] }
 #fluent-langneg = "0.13.0"
 fluent-bundle = "0.15"
+fluent-syntax = "*"
 lazy_static = "1.4.0"
 fluent = "0.16"
 ext-php-rs = {version = "0.10.0", features = ["anyhow"]}
