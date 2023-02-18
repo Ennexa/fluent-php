@@ -1,11 +1,44 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
+
+use std::ops::Range;
 use ext_php_rs::types::ZendHashTable;
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
 };
 
-use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
+use fluent::{FluentArgs, FluentBundle, FluentError, FluentResource, FluentValue};
 use unic_langid::LanguageIdentifier;
+
+#[php_class(name = "FluentPHP\\Exception\\ParserException")]
+#[extends(ext_php_rs::zend::ce::exception())]
+#[derive(Default, Clone)]
+pub struct FluentPhpException {
+    errors: Vec<FluentError>
+}
+impl From<FluentPhpException> for PhpException {
+    fn from(exception: FluentPhpException) -> Self {
+        let msg = format!("{}", &exception.errors[0]);
+
+        PhpException::default(msg.into())
+    }
+}
+
+fn line_offset_from_range(str: &str, range: &Range<usize>) -> Option<(u32, usize)> {
+    let mut line_no:u32 = 1;
+    let mut bytes: usize= 0;
+
+    for line in str.lines() {
+        let line_bytes = line.len() + 1;
+        bytes += line_bytes;
+        if bytes > range.start {
+            return Some((line_no, range.start + line_bytes - bytes));
+        }
+
+        line_no += 1;
+    }
+
+    None
+}
 
 #[php_class(name = "FluentPHP\\FluentBundle")]
 struct FluentPhpBundle {
@@ -30,15 +63,27 @@ impl FluentPhpBundle {
     #[php_method]
     pub fn add_resource(&mut self, source: String) -> PhpResult<()> {
         // Initializing resource
+        let source_copy = String::from(&source);
         let resource = match FluentResource::try_new(source) {
             Ok(resource) => resource,
-            Err((_resource, _error)) => return Err(format!("{}", _error[0]).into())
+            Err((_resource, _error)) => {
+                let slice = _error[0].slice
+                    .as_ref()
+                    .map_or(String::new(), |range| {
+                        let line = line_offset_from_range(&source_copy, range)
+                            .map_or(String::new(), |(line, _)| format!(" on line {}", line));
+
+                       format!("{}\n\n{}\n\n", line, source_copy[range.start..range.end].to_owned())
+                    });
+
+                return Err(format!("{}{}", _error[0], slice).into())
+            }
         };
 
         let bundle = &mut self.bundle;
         match bundle.add_resource(resource) {
             Ok(_value) => Ok(()),
-            Err(_error) => return Err(format!("{}", _error[0]).into()),
+            Err(_error) => return Err(FluentPhpException{errors: _error}.into()),
         }
     }
 
