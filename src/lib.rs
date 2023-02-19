@@ -1,8 +1,8 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
-use std::fmt::{Display, Formatter};
-use std::ops::Range;
-use ext_php_rs::types::ZendHashTable;
+use std::fmt::{Debug, Display, Formatter};
+use std::ops::{Deref, Range};
+use ext_php_rs::types::{ZendHashTable};
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
 };
@@ -11,9 +11,11 @@ use fluent::{FluentArgs, FluentBundle, FluentError, FluentResource, FluentValue}
 use fluent_syntax::parser::ParserError;
 use unic_langid::LanguageIdentifier;
 
+#[derive(Debug)]
 enum FluentPhpError {
     ParseError(Vec<FluentPhpParseError>),
-    Error(Vec<FluentError>)
+    Error(Vec<FluentError>),
+    Message(String)
 }
 
 impl FluentPhpError {
@@ -28,16 +30,25 @@ impl FluentPhpError {
     fn from_error(errors: Vec<FluentError>) -> Self {
         Self::Error(errors)
     }
+
+    fn new(error: String) -> Self {
+        Self::Message(error)
+    }
+}
+
+impl Display for FluentPhpError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+         match self {
+            FluentPhpError::ParseError(err) => write!(f, "{}", &err[0]),
+            FluentPhpError:: Error(err) => write!(f, "{}", &err[0]),
+            FluentPhpError:: Message(err) => write!(f, "{}", &err),
+        }
+    }
 }
 
 impl From<FluentPhpError> for PhpException {
     fn from(exception: FluentPhpError) -> Self {
-        let msg = match exception {
-            FluentPhpError::ParseError(err) => format!("{}", &err[0]),
-            FluentPhpError:: Error(err) => format!("{}", &err[0])
-        };
-
-        PhpException::default(msg.into())
+        PhpException::default(format!("{}", exception))
     }
 }
 
@@ -63,6 +74,7 @@ struct FluentPhpBundle {
     bundle: FluentBundle<FluentResource>,
 }
 
+#[derive(Debug)]
 struct FluentPhpParseError {
     line: u32,
     col: usize,
@@ -92,8 +104,41 @@ impl FluentPhpParseError {
     }
 }
 
+#[derive(Debug)]
+struct FluentPhpArgs<'a>(FluentArgs<'a>);
 
-#[php_impl(rename_methods = "camelCase")]
+impl<'a> Deref for FluentPhpArgs<'a> {
+    type Target = FluentArgs<'a>;
+
+    fn deref(&self) -> &FluentArgs<'a> {
+        &self.0
+    }
+}
+
+impl<'a> TryFrom<&ZendHashTable> for FluentPhpArgs<'a> {
+    type Error = FluentPhpError;
+
+    fn try_from(value: &ZendHashTable) -> Result<Self, Self::Error> {
+        let mut args = FluentArgs::new();
+        for (index, key, elem) in value.iter() {
+            let key = match key {
+                Some(key) => key,
+                None => index.to_string(),
+            };
+
+            let key = format!("{}", key.as_str());
+            if elem.is_string() {
+                args.set(key, FluentValue::from(format!("{}", elem.str().unwrap())));
+            } else if elem.is_long() || elem.is_double() {
+                args.set(key, FluentValue::from(elem.double().unwrap()));
+            } else {
+                return Err(FluentPhpError::Message(format!("Invalid value for argument '{}'. Expected string or number.", key).into()));
+            }
+        }
+
+        Ok(FluentPhpArgs(args))
+    }
+}#[php_impl(rename_methods = "camelCase")]
 impl FluentPhpBundle {
     #[constructor]
     fn __construct(lang: String) -> PhpResult<Self> {
@@ -127,26 +172,10 @@ impl FluentPhpBundle {
 
     #[php_method]
     fn format_pattern(&mut self, msg_id: String, arg_ids: &ZendHashTable) -> PhpResult<String> {
-        let mut args = FluentArgs::new();
-        for (index, key, elem) in arg_ids.iter() {
-            let key = match key {
-                Some(key) => key,
-                None => index.to_string(),
-            };
-
-            let key = format!("{}", key.as_str());
-            if elem.is_string() {
-                args.set(key, FluentValue::from(format!("{}", elem.str().unwrap())));
-            } else if elem.is_long() || elem.is_double() {
-                args.set(key, FluentValue::from(elem.double().unwrap()));
-            } else {
-                return Err(format!(
-                    "Invalid value for argument '{}'. Expected string or number.",
-                    key
-                )
-                .into());
-            }
-        }
+        let args:FluentPhpArgs = match arg_ids.try_into() {
+            Ok(args) => args,
+            Err(err) => return Err(err.into()),
+        };
 
         // Getting errors
         let mut errors = vec![];
