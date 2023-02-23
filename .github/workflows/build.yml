@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2019]
+        os: [ubuntu-20.04, windows-2019]
         # os: [windows-2019, macos-latest, ]
         # phpts: [ts, nts]
         phpts: [nts, ts]
@@ -25,7 +25,7 @@ jobs:
           # setup-php doesn't support thread safe PHP on Linux and macOS.
           - os: macos-latest
             phpts: ts
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             phpts: ts
     env:
       CARGO_TERM_COLOR: always
@@ -95,8 +95,8 @@ jobs:
       # - name: Test inline examples
       #   run: cargo test --release --all --all-features
       # - name: Run rustfmt
-      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest' && matrix.php == '8.2'
+      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-20.04' && matrix.php == '8.2'
       #   run: cargo fmt --all -- --check
       # - name: Run clippy
-      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest' && matrix.php == '8.2'
+      #   if: matrix.rust == 'stable' && matrix.os == 'ubuntu-20.04' && matrix.php == '8.2'
       #   run: cargo clippy --all -- -D warnings
