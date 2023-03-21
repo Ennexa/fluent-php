@@ -501,6 +501,7 @@ dependencies = [
  "fluent 0.16.0",
  "fluent-bundle",
  "fluent-syntax",
+ "intl-memoizer",
  "lazy_static",
  "unic-langid",
 ]

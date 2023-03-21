@@ -2,14 +2,19 @@
 
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, Range};
-use ext_php_rs::types::{ZendHashTable};
+use ext_php_rs::convert::{FromZval, IntoZval, IntoZvalDyn};
+use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
 };
+use ext_php_rs::flags::DataType;
 
+use fluent::types::FluentType;
 use fluent::{FluentArgs, FluentBundle, FluentError, FluentResource, FluentValue};
 use fluent_syntax::parser::ParserError;
 use unic_langid::LanguageIdentifier;
+use std::sync::{Mutex, MutexGuard};
+
 
 #[derive(Debug)]
 enum FluentPhpError {
@@ -104,6 +109,24 @@ impl FluentPhpParseError {
     }
 }
 
+fn zval_to_fluent_value(zv: Zval) -> FluentValue<'static>
+{
+    if zv.is_string() {
+        FluentValue::String(zv.string().unwrap().into())
+    } else if zv.is_long() || zv.is_double() {
+        FluentValue::Number(zv.double().unwrap().into())
+    } else if zv.is_bool() {
+        FluentValue::Number(if zv.is_true() { 1 } else { 0 }.into())
+    } else if zv.is_null() {
+        FluentValue::None
+    } else if zv.is_object() {
+        FluentValue::Custom(Box::new(FluentPhpZvalValue::new(zv.shallow_clone())))
+    } else {
+        FluentValue::Error
+    }
+}
+
+
 #[derive(Debug)]
 struct FluentPhpArgs<'a>(FluentArgs<'a>);
 
@@ -127,18 +150,233 @@ impl<'a> TryFrom<&ZendHashTable> for FluentPhpArgs<'a> {
             };
 
             let key = format!("{}", key.as_str());
-            if elem.is_string() {
-                args.set(key, FluentValue::from(format!("{}", elem.str().unwrap())));
-            } else if elem.is_long() || elem.is_double() {
-                args.set(key, FluentValue::from(elem.double().unwrap()));
-            } else {
-                return Err(FluentPhpError::Message(format!("Invalid value for argument '{}'. Expected string or number.", key).into()));
-            }
+            let elem = FluentPhpValue::from_zval(elem);
+            let value = match elem {
+                Some(elem) => elem,
+                None => return Err(FluentPhpError::Message(format!("Invalid value for argument '{}'. Expected string or number.", key).into()))
+            };
+            args.set(key, value);
         }
 
         Ok(FluentPhpArgs(args))
     }
-}#[php_impl(rename_methods = "camelCase")]
+}
+
+
+#[derive(Debug)]
+struct ThreadSafeWrapper<T>
+{
+    inner: Mutex<T>,
+}
+
+impl<T> ThreadSafeWrapper<T> {
+    pub fn new(inner: T) -> Self {
+        ThreadSafeWrapper {
+            inner: Mutex::new(inner),
+        }
+    }
+
+    pub fn lock(&self) -> MutexGuard<T> {
+        self.inner.lock().unwrap()
+    }
+}
+
+impl<T> Deref for ThreadSafeWrapper<T>
+{
+        type Target = Mutex<T>;
+
+    fn deref(&self) -> &Mutex<T> {
+        &self.inner
+    }
+}
+
+unsafe impl<T> Send for ThreadSafeWrapper<T> {}
+
+unsafe impl<T> Sync for ThreadSafeWrapper<T> {}
+
+#[derive(Debug)]
+struct FluentPhpZvalValue(ThreadSafeWrapper<Zval>);
+
+impl FluentPhpZvalValue {
+    pub fn new(zv: Zval) -> Self {
+        Self(ThreadSafeWrapper::new(zv))
+    }
+
+    fn stringify(&self) -> std::borrow::Cow<'static, str> {
+        let zval = self.0.lock();
+        if zval.is_string() {
+            return format!("{}", zval.str().unwrap()).into();
+        }
+        if zval.is_double() || zval.is_long() {
+            return format!("{}", zval.double().unwrap()).into();
+        }
+
+        if zval.is_bool() || zval.is_true() || zval.is_false() {
+            return if zval.bool().unwrap() { "true" } else { "false" }.into();
+        }
+
+        if zval.is_object() {
+            return "[Object]".into();
+        }
+
+        format!("Failed").into()
+    }
+}
+
+
+impl Deref for FluentPhpZvalValue {
+    type Target = ThreadSafeWrapper<Zval>;
+
+    fn deref(&self) -> &ThreadSafeWrapper<Zval> {
+        &self.0
+    }
+}
+
+
+impl PartialEq for FluentPhpZvalValue {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+        // self.0.get_type() == other.0.get_type()
+    }
+}
+
+impl FluentType for FluentPhpZvalValue {
+    fn duplicate(&self) -> Box<dyn FluentType + Send> {
+        Box::new(FluentPhpZvalValue::new(self.0.lock().shallow_clone()))
+    }
+
+    fn as_string(&self, _intls: &intl_memoizer::IntlLangMemoizer) -> std::borrow::Cow<'static, str> {
+        return self.stringify();
+    }
+
+    fn as_string_threadsafe(
+        &self,
+        _intls: &intl_memoizer::concurrent::IntlLangMemoizer,
+    ) -> std::borrow::Cow<'static, str> {
+        return self.stringify();
+    }
+}
+
+
+enum FluentPhpValue {
+    Bool(bool),
+    Double(f64),
+    Long(i64),
+    Str(String),
+    Zval(Zval),
+    None,
+    // Error,
+}
+
+impl Display for FluentPhpValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Str(s) => write!(f, "{}", &s),
+            Self::Long(n) => write!(f, "{}", n),
+            Self::Double(fl) => write!(f, "{}", fl),
+            Self::Bool(true) => write!(f, "{}", "true"),
+            Self::Bool(false) => write!(f, "{}", "false"),
+            Self::None => write!(f, ""),
+            Self::Zval(zv) => match zv {
+                val if val.is_long() => write!(f, "{}", val.long().unwrap()),
+                val if val.is_double() => write!(f, "{}", val.double().unwrap()),
+                val if val.is_string() => write!(f, "{}", val.str().unwrap()),
+                _ => write!(f, "{}", zv.str().unwrap_or("")),
+            },
+        }
+    }
+}
+
+impl Clone for FluentPhpValue {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Str(val) => Self::Str(val.clone()),
+            Self::Long(val) => Self::Long(*val),
+            Self::Double(val) => Self::Double(*val),
+            Self::Bool(val) => Self::Bool(*val),
+            Self::None => Self::None,
+            Self::Zval(val) => Self::Zval(val.shallow_clone()),
+        }
+    }
+}
+
+impl TryFrom<&FluentValue<'_>> for FluentPhpValue {
+    type Error = FluentPhpError;
+
+    fn try_from(value: &FluentValue<'_>) -> Result<Self, FluentPhpError> {
+        let value = match value {
+            FluentValue::String(s) => Self::Str(s.clone().into()),
+            FluentValue::Number(n) => Self::Double(n.value),
+            FluentValue::None => Self::None,
+            FluentValue::Custom(val) => {
+                if let Some(val) = val.as_ref().as_any().downcast_ref::<FluentPhpZvalValue>() {
+                    FluentPhpValue::Zval(val.lock().shallow_clone())
+                } else {
+                    FluentPhpValue::None
+                }
+            },
+            FluentValue::Error => return Err(FluentPhpError::Message(format!("Unsupported value type for named parameter").into())),
+        };
+
+        Ok(value)
+    }
+}
+
+impl Into<FluentValue<'_>> for FluentPhpValue
+{
+    fn into(self) -> FluentValue<'static> {
+        match self {
+            Self::Str(val) => FluentValue::String(val.into()),
+            Self::Long(val) => FluentValue::Number(val.into()),
+            Self::Double(val) => FluentValue::Number(val.into()),
+            Self::Bool(val) => FluentValue::Number(if val { 1 } else { 0 }.into()),
+            Self::Zval(val) => FluentValue::Custom(Box::new(FluentPhpZvalValue::new(val.shallow_clone())))
+,
+            Self::None => FluentValue::None,
+        }
+    }
+}
+
+impl FromZval<'_> for FluentPhpValue {
+    const TYPE: DataType = DataType::Mixed;
+    fn from_zval(zv: &Zval) -> Option<Self> {
+        let val = if zv.is_string() {
+            FluentPhpValue::Str(zv.string().unwrap().into())
+        } else if zv.is_long() {
+            FluentPhpValue::Long(zv.long().unwrap())
+        } else if zv.is_double() {
+            FluentPhpValue::Double(zv.double().unwrap())
+        } else if zv.is_bool() {
+            FluentPhpValue::Bool(zv.bool().unwrap())
+        } else if zv.is_null() {
+            FluentPhpValue::None
+        } else if zv.is_object() {
+            FluentPhpValue::Zval(zv.shallow_clone())
+        } else {
+            return None;
+        };
+
+        Some(val)
+    }
+}
+
+impl IntoZval for FluentPhpValue {
+    const TYPE: DataType = DataType::Mixed;
+
+    fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
+        match self.into() {
+            Self::Str(val) => zv.set_string(&val, persistent)?,
+            Self::Long(val) => zv.set_long(val),
+            Self::Bool(val) => zv.set_bool(val),
+            Self::Double(val) => zv.set_double(val),
+            Self::Zval(val) => *zv = val,
+            Self::None => zv.set_null(),
+        };
+        Ok(())
+    }
+}
+
+#[php_impl(rename_methods = "camelCase")]
 impl FluentPhpBundle {
     #[constructor]
     fn __construct(lang: String) -> PhpResult<Self> {
@@ -168,6 +406,32 @@ impl FluentPhpBundle {
             Ok(_value) => Ok(()),
             Err(_error) => return Err(FluentPhpError::from_error(_error).into()),
         }
+    }
+
+    #[php_method]
+    pub fn add_function(&mut self, fn_name: String, callable: &Zval) -> PhpResult<()> {
+        let callable = ZendCallable::new_owned(callable.shallow_clone()).unwrap();
+        let callable = ThreadSafeWrapper::new(callable);
+
+        let status = self.bundle.add_function(&fn_name, move |oargs, _named_args| {
+
+            // let val: dyn IntoZvalDyn = FluentPhpValue(args.get(0).unwrap());
+
+            let args: Vec<FluentPhpValue> = oargs
+                .iter()
+                .map(|p| p.try_into().unwrap())
+                .collect();
+            let args: Vec<&dyn IntoZvalDyn> = args
+                .iter()
+                .map(|p| p as &dyn IntoZvalDyn)
+                .collect();
+
+            let value = callable.lock().try_call(args.into()).unwrap();
+
+            return zval_to_fluent_value(value);
+        });
+
+        Ok(())
     }
 
     #[php_method]
