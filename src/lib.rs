@@ -35,10 +35,6 @@ impl FluentPhpError {
     fn from_error(errors: Vec<FluentError>) -> Self {
         Self::Error(errors)
     }
-
-    fn new(error: String) -> Self {
-        Self::Message(error)
-    }
 }
 
 impl Display for FluentPhpError {
@@ -115,17 +111,16 @@ fn zval_to_fluent_value(zv: Zval) -> FluentValue<'static>
         FluentValue::String(zv.string().unwrap().into())
     } else if zv.is_long() || zv.is_double() {
         FluentValue::Number(zv.double().unwrap().into())
-    } else if zv.is_bool() {
-        FluentValue::Number(if zv.is_true() { 1 } else { 0 }.into())
+    // } else if zv.is_bool() {
+    //     FluentValue::Number(if zv.is_true() { 1 } else { 0 }.into())
     } else if zv.is_null() {
         FluentValue::None
-    } else if zv.is_object() {
+    } else if zv.is_object() || zv.is_bool() {
         FluentValue::Custom(Box::new(FluentPhpZvalValue::new(zv.shallow_clone())))
     } else {
         FluentValue::Error
     }
 }
-
 
 #[derive(Debug)]
 struct FluentPhpArgs<'a>(FluentArgs<'a>);
@@ -232,11 +227,62 @@ impl Deref for FluentPhpZvalValue {
     }
 }
 
+fn compare<T>(val1: Option<T>, val2: Option<T>) -> bool
+    where T: PartialEq
+{
+    match (val1, val2) {
+        (Some(val1), Some(val2)) => val1 == val2,
+        _ => false
+    }
+}
 
 impl PartialEq for FluentPhpZvalValue {
     fn eq(&self, _other: &Self) -> bool {
+        let zv1 = self.lock();
+        let zv2 = _other.lock();
+
+        if zv1.is_null() && zv2.is_null() {
+            return true;
+        }
+
+        if zv1.is_bool() && zv2.is_bool() {
+            return zv1.is_true() == zv2.is_true();
+        }
+
+        if zv1.is_long() && zv2.is_long() {
+            return compare(zv1.long(), zv2.long());
+        }
+
+        if (zv1.is_long() || zv1.is_double()) && (zv2.is_long() || zv2.is_double()) {
+            return compare(zv1.double(), zv2.double());
+        }
+
+        if zv1.is_string() && zv2.is_string() {
+            return compare(zv1.str(), zv2.str());
+        }
+
+        if zv1.is_object() && zv2.is_object() {
+            let zo1 = zv1.object();
+            let zo2 = zv2.object();
+
+            if let (Some(zo1), Some(zo2)) = (zo1, zo2) {
+                if zo1.ce != zo2.ce {
+                    return false;
+                }
+
+                let status = unsafe {
+                    zo1.handlers.as_ref()
+                        .and_then(|handlers| handlers.compare)
+                        .map(|compare| (compare)(zv1.deref() as *const _ as *mut _, zv2.deref() as *const _ as *mut _))
+                };
+
+                if let Some(status) = status {
+                    return 0 == status;
+                }
+            }
+        }
+
         false
-        // self.0.get_type() == other.0.get_type()
     }
 }
 
@@ -259,7 +305,7 @@ impl FluentType for FluentPhpZvalValue {
 
 
 enum FluentPhpValue {
-    Bool(bool),
+    // Bool(bool),
     Double(f64),
     Long(i64),
     Str(String),
@@ -274,8 +320,8 @@ impl Display for FluentPhpValue {
             Self::Str(s) => write!(f, "{}", &s),
             Self::Long(n) => write!(f, "{}", n),
             Self::Double(fl) => write!(f, "{}", fl),
-            Self::Bool(true) => write!(f, "{}", "true"),
-            Self::Bool(false) => write!(f, "{}", "false"),
+            // Self::Bool(true) => write!(f, "{}", "true"),
+            // Self::Bool(false) => write!(f, "{}", "false"),
             Self::None => write!(f, ""),
             Self::Zval(zv) => match zv {
                 val if val.is_long() => write!(f, "{}", val.long().unwrap()),
@@ -293,7 +339,7 @@ impl Clone for FluentPhpValue {
             Self::Str(val) => Self::Str(val.clone()),
             Self::Long(val) => Self::Long(*val),
             Self::Double(val) => Self::Double(*val),
-            Self::Bool(val) => Self::Bool(*val),
+            // Self::Bool(val) => Self::Bool(*val),
             Self::None => Self::None,
             Self::Zval(val) => Self::Zval(val.shallow_clone()),
         }
@@ -329,7 +375,7 @@ impl Into<FluentValue<'_>> for FluentPhpValue
             Self::Str(val) => FluentValue::String(val.into()),
             Self::Long(val) => FluentValue::Number(val.into()),
             Self::Double(val) => FluentValue::Number(val.into()),
-            Self::Bool(val) => FluentValue::Number(if val { 1 } else { 0 }.into()),
+            // Self::Bool(val) => FluentValue::Number(if val { 1 } else { 0 }.into()),
             Self::Zval(val) => FluentValue::Custom(Box::new(FluentPhpZvalValue::new(val.shallow_clone())))
 ,
             Self::None => FluentValue::None,
@@ -346,11 +392,11 @@ impl FromZval<'_> for FluentPhpValue {
             FluentPhpValue::Long(zv.long().unwrap())
         } else if zv.is_double() {
             FluentPhpValue::Double(zv.double().unwrap())
-        } else if zv.is_bool() {
-            FluentPhpValue::Bool(zv.bool().unwrap())
+        // } else if zv.is_bool() {
+        //     FluentPhpValue::Bool(zv.bool().unwrap())
         } else if zv.is_null() {
             FluentPhpValue::None
-        } else if zv.is_object() {
+        } else if zv.is_object() || zv.is_bool() {
             FluentPhpValue::Zval(zv.shallow_clone())
         } else {
             return None;
@@ -367,7 +413,7 @@ impl IntoZval for FluentPhpValue {
         match self.into() {
             Self::Str(val) => zv.set_string(&val, persistent)?,
             Self::Long(val) => zv.set_long(val),
-            Self::Bool(val) => zv.set_bool(val),
+            // Self::Bool(val) => zv.set_bool(val),
             Self::Double(val) => zv.set_double(val),
             Self::Zval(val) => *zv = val,
             Self::None => zv.set_null(),
@@ -431,7 +477,10 @@ impl FluentPhpBundle {
             return zval_to_fluent_value(value);
         });
 
-        Ok(())
+        match status {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Failed to add function".into()),
+        }
     }
 
     #[php_method]
