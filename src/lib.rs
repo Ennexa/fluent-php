@@ -361,7 +361,7 @@ impl TryFrom<&FluentValue<'_>> for FluentPhpValue {
                     FluentPhpValue::None
                 }
             },
-            FluentValue::Error => return Err(FluentPhpError::Message(format!("Unsupported value type for named parameter").into())),
+            FluentValue::Error => return Err(FluentPhpError::Message(format!("Unsupported variable type").into())),
         };
 
         Ok(value)
@@ -460,21 +460,24 @@ impl FluentPhpBundle {
         let callable = ThreadSafeWrapper::new(callable);
 
         let status = self.bundle.add_function(&fn_name, move |oargs, _named_args| {
-
-            // let val: dyn IntoZvalDyn = FluentPhpValue(args.get(0).unwrap());
-
-            let args: Vec<FluentPhpValue> = oargs
+            let args: Result<Vec<FluentPhpValue>, FluentPhpError> = oargs
                 .iter()
-                .map(|p| p.try_into().unwrap())
-                .collect();
-            let args: Vec<&dyn IntoZvalDyn> = args
-                .iter()
-                .map(|p| p as &dyn IntoZvalDyn)
+                .map(|p| p.try_into())
                 .collect();
 
-            let value = callable.lock().try_call(args.into()).unwrap();
+            if let Ok(args) = args {
+                let args: Vec<&dyn IntoZvalDyn> = args
+                    .iter()
+                    .map(|p| p as &dyn IntoZvalDyn)
+                    .collect();
 
-            return zval_to_fluent_value(value);
+                return callable.lock()
+                    .try_call(args.into())
+                    .map(|value| zval_to_fluent_value(value))
+                    .unwrap_or(FluentValue::Error);
+            };
+
+            FluentValue::Error
         });
 
         match status {
