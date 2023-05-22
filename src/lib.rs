@@ -487,7 +487,7 @@ impl FluentPhpBundle {
     }
 
     #[php_method]
-    fn format_pattern(&mut self, msg_id: String, arg_ids: &ZendHashTable) -> PhpResult<String> {
+    pub fn format_pattern(&mut self, msg_id: String, arg_ids: &ZendHashTable) -> PhpResult<String> {
         let args:FluentPhpArgs = match arg_ids.try_into() {
             Ok(args) => args,
             Err(err) => return Err(err.into()),
@@ -513,6 +513,11 @@ impl FluentPhpBundle {
             .format_pattern(&pattern, Some(&args), &mut errors);
 
         Ok(value.into_owned())
+    }
+
+    #[php_method]
+    fn has_message(&mut self, msg_id: String) -> PhpResult<bool> {
+        Ok(self.bundle.has_message(&msg_id))
     }
 }
 

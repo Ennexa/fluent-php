@@ -25,6 +25,10 @@ namespace FluentPhp
         public function formatPattern(string $messageId, array $parameters): string
         {
         }
+
+        public function hasMessage(string $messageId): bool
+        {
+        }
     }
 }
 
