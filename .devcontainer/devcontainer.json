@@ -3,7 +3,17 @@
 {
 	"name": "Rust",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/rust:0-1-bullseye",
+	"build": {
+        // Path is relataive to the devcontainer.json file.
+        "dockerfile": "Dockerfile"
+  },
+  "mounts": [
+	 	{
+	 		"source": "devcontainer-cargo-cache-${devcontainerId}",
+	 		"target": "/usr/local/cargo",
+	 		"type": "volume"
+	 	}
+	],
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
