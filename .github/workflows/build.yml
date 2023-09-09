@@ -16,8 +16,8 @@ jobs:
         # phpts: [ts, nts]
         phpts: [nts, ts]
         rust: [nightly]
-        php: ["8.2"]
-        clang: ["14"]
+        php: ["8.2", "8.3"]
+        clang: ["16"]
         exclude:
           # ext-php-rs requires nightly Rust when on Windows.
           - os: windows-2019
