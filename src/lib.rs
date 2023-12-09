@@ -138,19 +138,13 @@ impl<'a> TryFrom<&ZendHashTable> for FluentPhpArgs<'a> {
 
     fn try_from(value: &ZendHashTable) -> Result<Self, Self::Error> {
         let mut args = FluentArgs::new();
-        for (index, key, elem) in value.iter() {
-            let key = match key {
-                Some(key) => key,
-                None => index.to_string(),
-            };
-
-            let key = format!("{}", key.as_str());
+        for (key, elem) in value.iter() {
             let elem = FluentPhpValue::from_zval(elem);
             let value = match elem {
                 Some(elem) => elem,
                 None => return Err(FluentPhpError::Message(format!("Invalid value for argument '{}'. Expected string or number.", key).into()))
             };
-            args.set(key, value);
+            args.set(key.to_string(), value);
         }
 
         Ok(FluentPhpArgs(args))

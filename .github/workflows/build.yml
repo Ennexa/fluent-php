@@ -1,9 +1,6 @@
 ---
 name: Build and Lint
-on:
-  push:
-    branches:
-      - master
+on: [push, pull_request]
 
 jobs:
   build:
@@ -11,13 +8,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019]
+        os: [ubuntu-22.04, windows-2019]
         # os: [windows-2019, macos-latest, ]
         # phpts: [ts, nts]
         phpts: [nts, ts]
         rust: [nightly]
-        php: ["8.1"]
-        clang: ["14"]
+        php: ["8.2", "8.3"]
+        clang: ["16"]
         exclude:
           # ext-php-rs requires nightly Rust when on Windows.
           - os: windows-2019
@@ -25,7 +22,7 @@ jobs:
           # setup-php doesn't support thread safe PHP on Linux and macOS.
           - os: macos-latest
             phpts: ts
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             phpts: ts
     env:
       CARGO_TERM_COLOR: always
