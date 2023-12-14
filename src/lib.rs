@@ -5,7 +5,7 @@ use std::ops::{Deref, Range};
 use ext_php_rs::convert::{FromZval, IntoZval, IntoZvalDyn};
 use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
-    info_table_end, info_table_row, info_table_start, prelude::*, zend::ModuleEntry,
+    info_table_end, info_table_row, info_table_start, prelude::*, zend::{ce,ModuleEntry},
 };
 use ext_php_rs::flags::DataType;
 
@@ -193,9 +193,11 @@ impl FluentPhpZvalValue {
 
     fn stringify(&self) -> std::borrow::Cow<'static, str> {
         let zval = self.0.lock();
+
         if zval.is_string() {
             return format!("{}", zval.str().unwrap()).into();
         }
+
         if zval.is_double() || zval.is_long() {
             return format!("{}", zval.double().unwrap()).into();
         }
@@ -204,11 +206,18 @@ impl FluentPhpZvalValue {
             return if zval.bool().unwrap() { "true" } else { "false" }.into();
         }
 
-        if zval.is_object() {
+        if  let Some(object) = zval.object() {
+            if object.instance_of(ce::stringable()) {
+                let result = object.try_call_method("__toString", vec![]);
+                if let Ok(result) = result {
+                    return format!("{}", result.str().unwrap()).into();
+                }
+            }
+
             return "[Object]".into();
         }
 
-        format!("Failed").into()
+        return format!("Failed").into();
     }
 }
 
