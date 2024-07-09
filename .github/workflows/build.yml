@@ -1,6 +1,11 @@
 ---
 name: Build and Lint
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+  release:
+    types: [created]
+  workflow_dispatch:
 
 jobs:
   build:
