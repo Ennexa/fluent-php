@@ -528,6 +528,7 @@ impl FluentPhpBundle {
 pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
     info_table_start!();
     info_table_row!("Fluent", "enabled");
+    info_table_row!("Version", env!("CARGO_PKG_VERSION"));
     info_table_end!();
 }
 
