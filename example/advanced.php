@@ -1,7 +1,9 @@
 <?php
 
 $resource = <<<'FTL'
-    log-time = User { $user->name} logged in at { $date->format("Y-m-d G:i:a") } {LT($date, $deadline) ->
+    # Select expression only allows string/numeric types as selector.
+    # We will use STR function to convert the boolean output of LT to string.
+    log-time = User { $user->name} logged in at { $date->format("Y-m-d G:i:a") } {STR(LT($date, $deadline)) ->
             [true] before
             *[false] after
         } deadline.
@@ -30,6 +32,7 @@ try {
     $bundle->addFunction('LT', fn ($val1, $val2) => $val1 < $val2);
     $bundle->addFunction('GTE', fn ($val1, $val2) => $val1 >= $val2);
     $bundle->addFunction('LTE', fn ($val1, $val2) => $val1 <= $val2);
+    $bundle->addFunction('STR', fn ($val) => is_bool($val) ? ($val ? "true" : "false") : (string)$val);
     $bundle->addFunction('OBJ_PROP', fn ($obj, $prop) => $obj->{$prop});
     $bundle->addFunction('OBJ_METHOD', fn ($obj, $method, ...$args) => $obj->{$method}(...$args));
 
