@@ -191,7 +191,7 @@ dependencies = [
  "cargo_metadata 0.15.4",
  "clap",
  "dialoguer",
- "ext-php-rs",
+ "ext-php-rs 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libloading 0.7.4",
  "semver",
 ]
@@ -513,7 +513,26 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
- "ext-php-rs-derive",
+ "ext-php-rs-derive 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "native-tls",
+ "once_cell",
+ "parking_lot",
+ "skeptic",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "ext-php-rs"
+version = "0.12.0"
+source = "git+https://github.com/davidcole1340/ext-php-rs?branch=master#e06fbaa066bd78c5755e7c7300488c27f26fbb55"
+dependencies = [
+ "anyhow",
+ "bindgen",
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "ext-php-rs-derive 0.10.1 (git+https://github.com/davidcole1340/ext-php-rs?branch=master)",
  "native-tls",
  "once_cell",
  "parking_lot",
@@ -527,6 +546,20 @@ name = "ext-php-rs-derive"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c10abd08571f7d63177a21de9a291a28c21b0d65df8ffb3e9cb1fc4b0722d69"
+dependencies = [
+ "anyhow",
+ "darling",
+ "ident_case",
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ext-php-rs-derive"
+version = "0.10.1"
+source = "git+https://github.com/davidcole1340/ext-php-rs?branch=master#e06fbaa066bd78c5755e7c7300488c27f26fbb55"
 dependencies = [
  "anyhow",
  "darling",
@@ -558,9 +591,8 @@ name = "fluent"
 version = "0.1.0"
 dependencies = [
  "cargo-php",
- "ext-php-rs",
+ "ext-php-rs 0.12.0 (git+https://github.com/davidcole1340/ext-php-rs?branch=master)",
  "fluent 0.16.1",
- "fluent-bundle",
  "fluent-syntax",
  "intl-memoizer",
  "lazy_static",

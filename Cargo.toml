@@ -13,14 +13,11 @@ crate-type = ["cdylib"]
 cargo-php = "*"
 
 [dependencies]
-# rustler = "0.27.0"
 unic-langid = { version = "0.9", features = ["macros"] }
-#fluent-langneg = "0.13.0"
-fluent-bundle = "0.15"
 fluent-syntax = "0.11.0"
 lazy_static = "1.4.0"
-fluent = "0.16"
-ext-php-rs = {version = "0.12.0", features = ["anyhow"]}
+fluent = "0.16.1"
+ext-php-rs = {version = "0.12.0", features = ["anyhow"], git = 'https://github.com/davidcole1340/ext-php-rs', branch = 'master'}
 intl-memoizer = "0.5.1"
 
 [profile.release]
