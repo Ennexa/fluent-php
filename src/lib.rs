@@ -5,7 +5,9 @@ use std::ops::{Deref, Range};
 use ext_php_rs::convert::{FromZval, IntoZval, IntoZvalDyn};
 use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
-    info_table_end, info_table_row, info_table_start, prelude::*, zend::{ce,ModuleEntry},
+    info_table_end, info_table_row, info_table_start,
+	prelude::*,
+	zend::{ce,ModuleEntry},
 };
 use ext_php_rs::flags::DataType;
 
@@ -70,7 +72,8 @@ fn line_offset_from_range(str: &str, range: &Range<usize>) -> Option<(u32, usize
     None
 }
 
-#[php_class(name = "FluentPHP\\FluentBundle")]
+#[php_class]
+#[php(name = "FluentPHP\\FluentBundle")]
 struct FluentPhpBundle {
     bundle: FluentBundle<FluentResource>,
 }
@@ -411,6 +414,7 @@ impl FromZval<'_> for FluentPhpValue {
 
 impl IntoZval for FluentPhpValue {
     const TYPE: DataType = DataType::Mixed;
+    const NULLABLE: bool = false;
 
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
         match self.into() {
@@ -425,9 +429,8 @@ impl IntoZval for FluentPhpValue {
     }
 }
 
-#[php_impl(rename_methods = "camelCase")]
+#[php_impl]
 impl FluentPhpBundle {
-    #[constructor]
     fn __construct(lang: String) -> PhpResult<Self> {
         let lang_id = match lang.parse::<LanguageIdentifier>() {
             Ok(lang_id) => lang_id,
@@ -440,7 +443,6 @@ impl FluentPhpBundle {
         Ok(Self { bundle })
     }
 
-    #[php_method]
     pub fn add_resource(&mut self, source: String) -> PhpResult<()> {
         // Initializing resource
         let resource = match FluentResource::try_new(source) {
@@ -457,7 +459,6 @@ impl FluentPhpBundle {
         }
     }
 
-    #[php_method]
     pub fn add_function(&mut self, fn_name: String, callable: &Zval) -> PhpResult<()> {
         let callable = ZendCallable::new_owned(callable.shallow_clone()).unwrap();
         let callable = ThreadSafeWrapper::new(callable);
@@ -489,7 +490,6 @@ impl FluentPhpBundle {
         }
     }
 
-    #[php_method]
     pub fn format_pattern(&mut self, msg_id: String, arg_ids: &ZendHashTable) -> PhpResult<String> {
         let args:FluentPhpArgs = match arg_ids.try_into() {
             Ok(args) => args,
@@ -518,7 +518,6 @@ impl FluentPhpBundle {
         Ok(value.into_owned())
     }
 
-    #[php_method]
     fn has_message(&mut self, msg_id: String) -> PhpResult<bool> {
         Ok(self.bundle.has_message(&msg_id))
     }
@@ -534,5 +533,7 @@ pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
 
 #[php_module]
 pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
-    module.info_function(php_module_info)
+    module
+        .class::<FluentPhpBundle>()
+        .info_function(php_module_info)
 }
