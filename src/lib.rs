@@ -168,7 +168,7 @@ impl<T> ThreadSafeWrapper<T> {
         }
     }
 
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         self.inner.lock().unwrap()
     }
 }
