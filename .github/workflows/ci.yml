@@ -2,13 +2,6 @@
 
 name: Build and Lint
 on:
-  workflow_dispatch:
-    inputs:
-      debug_enabled:
-        type: boolean
-        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
-        required: false
-        default: false
   push:
     paths-ignore:
       - '**.md'
@@ -80,11 +73,6 @@ jobs:
         run: |
           cargo build --target ${{ matrix.target }} --lib
           cargo test --target ${{ matrix.target }}
-
-      # Enable tmate debugging of manually-triggered workflows if the input option was provided
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
 
       - name: Run PHP Test
         run: NO_INTERACTION=1 php run-tests.php -n -d extension=target/${{ matrix.target }}/debug/libfluent.so
