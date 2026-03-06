@@ -17,7 +17,7 @@ unic-langid = { version = "0.9", features = ["macros"] }
 fluent-syntax = "0.12.0"
 lazy_static = "1.5.0"
 fluent = "0.17.0"
-ext-php-rs = {version = "0.14.2", features = ["anyhow"]}
+ext-php-rs = {version = "0.15.6", features = ["anyhow"]}
 intl-memoizer = "0.5.3"
 
 [profile.release]
