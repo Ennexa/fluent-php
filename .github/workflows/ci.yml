@@ -11,10 +11,65 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   EXTENSION_NAME: fluent
 
 jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        clang: [ "16" ]
+        target: [ "x86_64-unknown-linux-gnu" ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache LLVM and Clang
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          key: llvm-${{ matrix.clang }}-${{ runner.os }}
+
+      - name: Setup LLVM & Clang
+        id: clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ matrix.clang }}
+          directory: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+      - name: Configure Clang
+        run: |
+          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+          echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: lint-${{ matrix.target }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --target ${{ matrix.target }} --all-targets -- -D warnings
+
   tests:
     runs-on: ubuntu-22.04
     strategy:
@@ -29,18 +84,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache cargo and LLVM and Clang
+      - name: Cache LLVM and Clang
         id: cache-llvm
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-            ${{ runner.temp }}/llvm-${{ matrix.clang }}
-          key: ${{ matrix.php-version }}-test
+          path: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          key: llvm-${{ matrix.clang }}-${{ runner.os }}
 
       - name: Setup LLVM & Clang
         id: clang
@@ -62,24 +111,27 @@ jobs:
           php-version: ${{ matrix.php-version }}
           tools: php-config
 
-      - name: Install latest Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source $HOME/.cargo/env
-          rustup default stable
-          rustup target add ${{ matrix.target }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}-${{ matrix.php-version }}
 
       - name: Build module
         run: |
           cargo build --target ${{ matrix.target }} --lib
           cargo test --target ${{ matrix.target }}
 
-      - name: Run PHP Test
-        run: NO_INTERACTION=1 php run-tests.php -n -d extension=target/${{ matrix.target }}/debug/libfluent.so
-
   build:
     runs-on: ${{ matrix.os }}
-    needs: tests
+    needs:
+      - tests
+      - lint
     strategy:
       matrix:
         clang: [ "16" ]
@@ -91,7 +143,7 @@ jobs:
           - { target: x86_64-pc-windows-msvc, rust_channel: nightly }
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
           - { target: aarch64-apple-darwin, os: macos-latest }
-          - { target: x86_64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04 }
         exclude:
@@ -106,18 +158,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache cargo and LLVM and Clang
+      - name: Cache LLVM and Clang
         id: cache-llvm
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-            ${{ runner.temp }}/llvm-${{ matrix.clang }}
-          key: ${{ matrix.php-version }}-test
+          path: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          key: llvm-${{ matrix.clang }}-${{ runner.os }}
 
       - name: Setup LLVM & Clang
         id: clang
@@ -135,13 +181,23 @@ jobs:
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
 
-      - name: Install latest Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          #source $HOME/.cargo/env
-          rustup default ${{ matrix.rust_channel }}
-          rustup target add ${{ matrix.target }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          targets: ${{ matrix.target }}
+          toolchain: ${{ matrix.rust_channel }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}-${{ matrix.php-version }}
+
+      - name: Force rebuild of PHP-linked crate to prevent ts/nts conflict
+        if: runner.os == 'Windows'
         shell: bash
+        run: |
+          cargo clean -p ext-php-rs
+          rm -rf target/*/build/ext-php-rs-* 2>/dev/null || true
 
       - name: Setup PHP with PECL extension
         uses: shivammathur/setup-php@v2
@@ -184,9 +240,60 @@ jobs:
           name: php${{ matrix.php-version }}-${{ matrix.phpts }}-${{ matrix.target }}
           path: target/php${{ matrix.php-version }}-${{ matrix.phpts }}-${{ matrix.target }}-${{ env.EXTENSION_NAME }}.${{ env.LIB_EXT }}
 
+  integration:
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: [ "8.2", "8.3", "8.4", "8.5" ]
+        target: [ x86_64-pc-windows-msvc, aarch64-apple-darwin, x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu ]
+        phpts: [ "nts", "ts" ]
+        include:
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
+        exclude:
+          - { target: aarch64-apple-darwin, phpts: ts }
+          - { target: x86_64-apple-darwin, phpts: ts }
+          - { target: x86_64-unknown-linux-gnu, phpts: ts }
+          - { target: aarch64-unknown-linux-gnu, phpts: ts }
+          - { target: aarch64-unknown-linux-gnu }   # build-only: no native arm64 Linux runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+        env:
+          phpts: ${{ matrix.phpts }}
+
+      - name: Download built extension
+        uses: actions/download-artifact@v4
+        with:
+          name: php${{ matrix.php-version }}-${{ matrix.phpts }}-${{ matrix.target }}
+          path: ./dist
+
+      - name: Run PHP Test
+        shell: bash
+        run: |
+          set -x
+          EXT=$(find ./dist -maxdepth 1 -type f \( -name '*.so' -o -name '*.dll' \) | head -n1)
+          if [ -z "$EXT" ]; then
+            echo "::error::No built extension found in ./dist"
+            exit 1
+          fi
+          php -d extension="$EXT" -m
+          NO_INTERACTION=1 php run-tests.php -n -d extension="$EXT"
+
   release:
     runs-on: ubuntu-22.04
-    needs: build
+    needs: integration
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
 
     steps:
