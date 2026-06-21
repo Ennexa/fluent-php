@@ -1,5 +1,6 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
+use ext_php_rs::boxed::ZBox;
 use ext_php_rs::convert::{FromZval, IntoZval, IntoZvalDyn};
 use ext_php_rs::flags::DataType;
 use ext_php_rs::types::{ZendHashTable, Zval};
@@ -17,10 +18,59 @@ use fluent_syntax::parser::ParserError;
 use std::sync::{Mutex, MutexGuard};
 use unic_langid::LanguageIdentifier;
 
+#[php_class]
+#[php(name = "FluentPHP\\Exception")]
+#[php(extends(ce = ce::exception, stub = "\\Exception"))]
+#[derive(Default)]
+struct Exception;
+
+#[php_class]
+#[php(name = "FluentPHP\\ParserException")]
+#[php(extends(Exception))]
+#[derive(Default)]
+struct ParserException {
+    #[php(prop)]
+    message: String,
+    errors: Vec<(i64, i64, String)>,
+}
+
+#[php_impl]
+impl ParserException {
+    pub fn get_errors(&self) -> Vec<ZBox<ZendHashTable>> {
+        self.errors
+            .iter()
+            .map(|(line, col, source)| {
+                let mut ht = ZendHashTable::new();
+                ht.insert("line", *line).unwrap();
+                ht.insert("col", *col).unwrap();
+                ht.insert("source", source.clone()).unwrap();
+                ht
+            })
+            .collect()
+    }
+}
+
+#[php_class]
+#[php(name = "FluentPHP\\ResolverException")]
+#[php(extends(Exception))]
+#[derive(Default)]
+struct ResolverException {
+    #[php(prop)]
+    message: String,
+    errors: Vec<String>,
+}
+
+#[php_impl]
+impl ResolverException {
+    pub fn get_errors(&self) -> Vec<String> {
+        self.errors.clone()
+    }
+}
+
 #[derive(Debug)]
 enum FluentPhpError {
     ParseError(Vec<FluentPhpParseError>),
-    Error(Vec<FluentError>),
+    ResolverError(Vec<FluentError>),
     Message(String),
 }
 
@@ -35,15 +85,60 @@ impl FluentPhpError {
     }
 
     fn from_error(errors: Vec<FluentError>) -> Self {
-        Self::Error(errors)
+        if errors.len() == 1 {
+            return Self::Message(format!("{}", &errors[0]));
+        }
+
+        let ids = errors
+            .iter()
+            .map(|e| match e {
+                FluentError::Overriding { id, .. } => format!("\"{}\"", id),
+                _ => format!("{}", e),
+            })
+            .collect::<Vec<_>>();
+
+        Self::Message(format!(
+            "Attempt to override existing entries: {}.",
+            ids.join(", ")
+        ))
+    }
+}
+
+fn resolver_inner(e: &FluentError) -> String {
+    match e {
+        FluentError::ResolverError(inner) => format!("{}", inner),
+        _ => format!("{}", e),
     }
 }
 
 impl Display for FluentPhpError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FluentPhpError::ParseError(err) => write!(f, "{}", &err[0]),
-            FluentPhpError::Error(err) => write!(f, "{}", &err[0]),
+            FluentPhpError::ParseError(errs) => {
+                if errs.len() == 1 {
+                    write!(f, "Parse error: {}", errs[0])
+                } else {
+                    write!(f, "Parse errors:")?;
+                    for err in errs {
+                        write!(f, "\n  - {}", err)?;
+                    }
+                    Ok(())
+                }
+            }
+            FluentPhpError::ResolverError(errs) => {
+                let count = errs.len();
+                let label = if count == 1 {
+                    "Resolution failed with error: ".to_string()
+                } else {
+                    format!("Resolution failed with {} errors: ", count)
+                };
+                let mut parts: Vec<String> =
+                    errs.iter().take(3).map(resolver_inner).collect();
+                if count > 3 {
+                    parts.push(format!("and {} more", count - 3));
+                }
+                write!(f, "{}{}", label, parts.join("; "))
+            }
             FluentPhpError::Message(err) => write!(f, "{}", &err),
         }
     }
@@ -51,14 +146,36 @@ impl Display for FluentPhpError {
 
 impl From<FluentPhpError> for PhpException {
     fn from(exception: FluentPhpError) -> Self {
-        PhpException::default(format!("{}", exception))
+        let message = format!("{}", exception);
+        match exception {
+            FluentPhpError::ParseError(parse_errors) => {
+                let errors = parse_errors
+                    .iter()
+                    .map(|e| (e.line as i64, e.col as i64, e.source.clone()))
+                    .collect();
+                let obj = ParserException {
+                    message: message.clone(),
+                    errors,
+                };
+                PhpException::default(message).with_object(obj.into_zval(true).unwrap())
+            }
+            FluentPhpError::ResolverError(fluent_errors) => {
+                let errors = fluent_errors.iter().map(resolver_inner).collect();
+                let obj = ResolverException {
+                    message: message.clone(),
+                    errors,
+                };
+                PhpException::default(message).with_object(obj.into_zval(true).unwrap())
+            }
+            _ => PhpException::from_class::<Exception>(message),
+        }
     }
 }
 
 fn line_offset_from_range(str: &str, range: &Range<usize>) -> Option<(u32, usize)> {
     let mut bytes: usize = 0;
 
-    for (line_no, line) in str.lines().enumerate() {
+    for (line_no, line) in str.split('\n').enumerate() {
         let line_bytes = line.len() + 1;
         bytes += line_bytes;
         if bytes > range.start {
@@ -85,11 +202,11 @@ struct FluentPhpParseError {
 
 impl Display for FluentPhpParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} on line {}, col {}\n\n{}\n\n",
-            self.error, self.line, self.col, self.source
-        )
+        write!(f, "Line {}, col {}: {}", self.line, self.col, self.error)?;
+        if !self.source.is_empty() {
+            write!(f, " - \"{}\"", self.source.trim())?;
+        }
+        Ok(())
     }
 }
 
@@ -144,13 +261,13 @@ impl<'a> TryFrom<&ZendHashTable> for FluentPhpArgs<'a> {
     fn try_from(value: &ZendHashTable) -> Result<Self, Self::Error> {
         let mut args = FluentArgs::new();
         for (key, elem) in value.iter() {
-            let elem = FluentPhpValue::from_zval(elem);
-            let value = match elem {
-                Some(elem) => elem,
+            let value = match FluentPhpValue::from_zval(elem) {
+                Some(v) => v,
                 None => {
                     return Err(FluentPhpError::Message(format!(
-                        "Invalid value for argument '{}'. Expected string or number.",
-                        key
+                        "Unsupported type for argument \"{}\": {}.",
+                        key,
+                        elem.get_type()
                     )))
                 }
             };
@@ -455,7 +572,11 @@ impl FluentPhpBundle {
     fn __construct(lang: String) -> PhpResult<Self> {
         let lang_id = match lang.parse::<LanguageIdentifier>() {
             Ok(lang_id) => lang_id,
-            Err(_e) => return Err("Invalid language identifier.".into()),
+            Err(_e) => {
+                return Err(PhpException::from_class::<Exception>(
+                    "Invalid language identifier.".to_string(),
+                ))
+            }
         };
 
         let mut bundle = FluentBundle::new(vec![lang_id]);
@@ -506,7 +627,7 @@ impl FluentPhpBundle {
 
         match status {
             Ok(_) => Ok(()),
-            Err(_) => Err("Failed to add function".into()),
+            Err(e) => Err(PhpException::from_class::<Exception>(e.to_string())),
         }
     }
 
@@ -519,18 +640,32 @@ impl FluentPhpBundle {
         // Getting message
         let msg = match self.bundle.get_message(&msg_id) {
             Some(msg) => msg,
-            None => return Err("Message not found".into()),
+            None => {
+                return Err(PhpException::from_class::<Exception>(format!(
+                    "Message \"{}\" not found.",
+                    msg_id
+                )))
+            }
         };
 
         // Formatting pattern
         let pattern = match msg.value() {
             Some(value) => value,
-            None => return Err("Failed to load message AST.".into()),
+            None => {
+                return Err(PhpException::from_class::<Exception>(format!(
+                    "Message \"{}\" has no value.",
+                    msg_id
+                )))
+            }
         };
 
         let value = self
             .bundle
             .format_pattern(pattern, Some(&args), &mut errors);
+
+        if !errors.is_empty() {
+            return Err(FluentPhpError::ResolverError(errors).into());
+        }
 
         Ok(value.into_owned())
     }
@@ -551,6 +686,9 @@ pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
 #[php_module]
 pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
     module
+        .class::<Exception>()
+        .class::<ParserException>()
+        .class::<ResolverException>()
         .class::<FluentPhpBundle>()
         .info_function(php_module_info)
 }
