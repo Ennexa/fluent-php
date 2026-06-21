@@ -692,3 +692,35 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<FluentPhpBundle>()
         .info_function(php_module_info)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_offset_from_range_reports_one_based_lines_and_zero_based_columns() {
+        let source = "a\nbc\ndef";
+
+        assert_eq!(line_offset_from_range(source, &(0..1)), Some((1, 0)));
+        assert_eq!(line_offset_from_range(source, &(1..2)), Some((1, 1)));
+        assert_eq!(line_offset_from_range(source, &(2..3)), Some((2, 0)));
+        assert_eq!(line_offset_from_range(source, &(4..5)), Some((2, 2)));
+        assert_eq!(line_offset_from_range(source, &(5..6)), Some((3, 0)));
+        assert_eq!(line_offset_from_range(source, &(7..8)), Some((3, 2)));
+        assert_eq!(line_offset_from_range(source, &(99..100)), None);
+    }
+
+    #[test]
+    fn parse_ini_bool_treats_only_false_spellings_as_false() {
+        for value in [
+            "", "0", "off", "Off", "OFF", "false", "False", "FALSE", "no", "No", "NO", " 0 ",
+            " off ", " false ", " no ",
+        ] {
+            assert!(!parse_ini_bool(value), "{value:?} should parse as false");
+        }
+
+        for value in ["1", "on", "true", "yes", "anything else", " falsey "] {
+            assert!(parse_ini_bool(value), "{value:?} should parse as true");
+        }
+    }
+}

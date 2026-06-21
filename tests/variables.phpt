@@ -1,48 +1,59 @@
 --TEST--
-Test variables
+PHP variable types as Fluent pattern arguments
 --FILE--
 <?php
 
 class StringableObject {
-	public function __toString() {
-		return "__toString Value";
-	}
+    public function __toString() {
+        return "__toString Value";
+    }
 }
-$resource = <<<'FTL'
-    content = { $value }
-    FTL;
 
-try {
-    $bundle = new FluentPhp\FluentBundle('en');
-    $bundle->addResource($resource);
+class NonStringableObject {}
 
-    $response = $bundle->formatPattern('content', ['value' => 1]);
-    echo $response, PHP_EOL;
+$bundle = new FluentPhp\FluentBundle('en');
+$bundle->addResource('content = { $value }' . "\n");
 
-    $response = $bundle->formatPattern('content', ['value' => 2.1]);
-    echo $response, PHP_EOL;
+echo "--- 1: integer ---\n";
+echo $bundle->formatPattern('content', ['value' => 1]), PHP_EOL;
 
-    $response = $bundle->formatPattern('content', ['value' => true]);
-    echo $response, PHP_EOL;
+echo "--- 2: float ---\n";
+echo $bundle->formatPattern('content', ['value' => 2.1]), PHP_EOL;
 
-    $response = $bundle->formatPattern('content', ['value' => false]);
-    echo $response, PHP_EOL;
+echo "--- 3: boolean true ---\n";
+echo $bundle->formatPattern('content', ['value' => true]), PHP_EOL;
 
-    $response = $bundle->formatPattern('content', ['value' => "Hello World"]);
-    echo $response, PHP_EOL;
+echo "--- 4: boolean false ---\n";
+echo $bundle->formatPattern('content', ['value' => false]), PHP_EOL;
 
-    $response = $bundle->formatPattern('content', ['value' => new StringableObject]);
-    echo $response, PHP_EOL;
-} catch (\Exception $e) {
-    print_r($e);
-}
+echo "--- 5: string ---\n";
+echo $bundle->formatPattern('content', ['value' => 'Hello World']), PHP_EOL;
+
+echo "--- 6: Stringable object ---\n";
+echo $bundle->formatPattern('content', ['value' => new StringableObject()]), PHP_EOL;
+
+echo "--- 7: non-Stringable object ---\n";
+echo $bundle->formatPattern('content', ['value' => new NonStringableObject()]), PHP_EOL;
+
+echo "--- 8: null ---\n";
+var_dump($bundle->formatPattern('content', ['value' => null]));
 ?>
 ===DONE===
 --EXPECT--
+--- 1: integer ---
 1
+--- 2: float ---
 2.1
+--- 3: boolean true ---
 true
+--- 4: boolean false ---
 false
+--- 5: string ---
 Hello World
+--- 6: Stringable object ---
 __toString Value
+--- 7: non-Stringable object ---
+[Object]
+--- 8: null ---
+string(0) ""
 ===DONE===
