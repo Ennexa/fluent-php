@@ -2,21 +2,26 @@
 
 use ext_php_rs::boxed::ZBox;
 use ext_php_rs::convert::{FromZval, IntoZval, IntoZvalDyn};
-use ext_php_rs::flags::DataType;
+use ext_php_rs::flags::{DataType, IniEntryPermission};
 use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start,
     prelude::*,
-    zend::{ce, ModuleEntry},
+    zend::{ce, ExecutorGlobals, IniEntryDef, ModuleEntry},
 };
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, Range};
+use std::sync::Arc;
 
 use fluent::types::FluentType;
 use fluent::{FluentArgs, FluentBundle, FluentError, FluentResource, FluentValue};
 use fluent_syntax::parser::ParserError;
 use std::sync::{Mutex, MutexGuard};
 use unic_langid::LanguageIdentifier;
+
+mod cache;
+
+// -- Exception classes --
 
 #[php_class]
 #[php(name = "FluentPHP\\Exception")]
@@ -66,6 +71,14 @@ impl ResolverException {
         self.errors.clone()
     }
 }
+
+#[php_class]
+#[php(name = "FluentPHP\\CacheException")]
+#[php(extends(Exception))]
+#[derive(Default)]
+struct CacheException;
+
+// -- Internal error types --
 
 #[derive(Debug)]
 enum FluentPhpError {
@@ -132,8 +145,7 @@ impl Display for FluentPhpError {
                 } else {
                     format!("Resolution failed with {} errors: ", count)
                 };
-                let mut parts: Vec<String> =
-                    errs.iter().take(3).map(resolver_inner).collect();
+                let mut parts: Vec<String> = errs.iter().take(3).map(resolver_inner).collect();
                 if count > 3 {
                     parts.push(format!("and {} more", count - 3));
                 }
@@ -172,6 +184,32 @@ impl From<FluentPhpError> for PhpException {
     }
 }
 
+fn cache_error_to_php(e: cache::CacheError) -> PhpException {
+    match e {
+        cache::CacheError::LockPoisoned => PhpException::from_class::<CacheException>(
+            "The Fluent process cache is unavailable because its lock was poisoned.".to_string(),
+        ),
+        cache::CacheError::Io(io_err) => {
+            PhpException::from_class::<Exception>(format!("I/O error: {}", io_err))
+        }
+        cache::CacheError::Parse { resource, errors } => {
+            FluentPhpError::from_parse_error(&resource, errors).into()
+        }
+    }
+}
+
+fn cache_file_error_to_php(path: &str, e: cache::CacheError) -> PhpException {
+    match e {
+        cache::CacheError::Io(io_err) => PhpException::from_class::<Exception>(format!(
+            "Failed to read file \"{}\": {}",
+            path, io_err
+        )),
+        other => cache_error_to_php(other),
+    }
+}
+
+// -- Parse error detail --
+
 fn line_offset_from_range(str: &str, range: &Range<usize>) -> Option<(u32, usize)> {
     let mut bytes: usize = 0;
 
@@ -184,12 +222,6 @@ fn line_offset_from_range(str: &str, range: &Range<usize>) -> Option<(u32, usize
     }
 
     None
-}
-
-#[php_class]
-#[php(name = "FluentPHP\\FluentBundle")]
-struct FluentPhpBundle {
-    bundle: FluentBundle<FluentResource>,
 }
 
 #[derive(Debug)]
@@ -228,13 +260,84 @@ impl FluentPhpParseError {
     }
 }
 
+// -- FluentResource PHP class --
+
+#[php_class]
+#[php(name = "FluentPHP\\FluentResource")]
+struct FluentPhpResource {
+    inner: Arc<FluentResource>,
+}
+
+#[php_impl]
+impl FluentPhpResource {
+    pub fn from_string(source: String) -> PhpResult<Self> {
+        let inner = cache::uncached_parse_string(source).map_err(cache_error_to_php)?;
+        Ok(Self { inner })
+    }
+
+    pub fn from_file(path: String) -> PhpResult<Self> {
+        let inner =
+            cache::uncached_parse_file(&path).map_err(|e| cache_file_error_to_php(&path, e))?;
+        Ok(Self { inner })
+    }
+}
+
+// -- ResourceCache PHP class --
+
+#[php_class]
+#[php(name = "FluentPHP\\ResourceCache")]
+#[derive(Default)]
+struct ResourceCache;
+
+#[php_impl]
+impl ResourceCache {
+    pub fn from_string(source: String) -> PhpResult<FluentPhpResource> {
+        let inner = cache::get_or_parse_string(source).map_err(cache_error_to_php)?;
+        Ok(FluentPhpResource { inner })
+    }
+
+    pub fn from_file(path: String) -> PhpResult<FluentPhpResource> {
+        let inner =
+            cache::get_or_parse_file(&path).map_err(|e| cache_file_error_to_php(&path, e))?;
+        Ok(FluentPhpResource { inner })
+    }
+
+    pub fn invalidate_file(path: String) -> PhpResult<bool> {
+        cache::invalidate_file(&path).map_err(cache_error_to_php)
+    }
+
+    pub fn clear() -> PhpResult<()> {
+        cache::clear().map_err(cache_error_to_php)
+    }
+
+    pub fn get_stats() -> PhpResult<ZBox<ZendHashTable>> {
+        let s = cache::stats().map_err(cache_error_to_php)?;
+        let mut ht = ZendHashTable::new();
+        ht.insert("entries", (s.string_entries + s.file_entries) as i64)
+            .unwrap();
+        ht.insert("cache_weight", s.current_weight as i64).unwrap();
+        ht.insert("hits", s.hits as i64).unwrap();
+        ht.insert("metadata_hits", s.metadata_hits as i64).unwrap();
+        ht.insert("content_hits", s.content_hits as i64).unwrap();
+        ht.insert("misses", s.misses as i64).unwrap();
+        ht.insert("loads", s.loads as i64).unwrap();
+        ht.insert("errors", s.errors as i64).unwrap();
+        ht.insert("evictions", s.evictions as i64).unwrap();
+        ht.insert("skipped_oversize", s.skipped_oversize as i64)
+            .unwrap();
+        ht.insert("max_weight", s.max_weight as i64).unwrap();
+        ht.insert("pid", std::process::id() as i64).unwrap();
+        Ok(ht)
+    }
+}
+
+// -- Zval / FluentValue conversion --
+
 fn zval_to_fluent_value(zv: Zval) -> FluentValue<'static> {
     if zv.is_string() {
         FluentValue::String(zv.string().unwrap().into())
     } else if zv.is_long() || zv.is_double() {
         FluentValue::Number(zv.double().unwrap().into())
-    // } else if zv.is_bool() {
-    //     FluentValue::Number(if zv.is_true() { 1 } else { 0 }.into())
     } else if zv.is_null() {
         FluentValue::None
     } else if zv.is_object() || zv.is_bool() {
@@ -445,13 +548,11 @@ impl FluentType for FluentPhpZvalValue {
 }
 
 enum FluentPhpValue {
-    // Bool(bool),
     Double(f64),
     Long(i64),
     Str(String),
     Zval(Zval),
     None,
-    // Error,
 }
 
 impl Display for FluentPhpValue {
@@ -460,8 +561,6 @@ impl Display for FluentPhpValue {
             Self::Str(s) => write!(f, "{}", &s),
             Self::Long(n) => write!(f, "{}", n),
             Self::Double(fl) => write!(f, "{}", fl),
-            // Self::Bool(true) => write!(f, "{}", "true"),
-            // Self::Bool(false) => write!(f, "{}", "false"),
             Self::None => write!(f, ""),
             Self::Zval(zv) => match zv {
                 val if val.is_long() => write!(f, "{}", val.long().unwrap()),
@@ -479,7 +578,6 @@ impl Clone for FluentPhpValue {
             Self::Str(val) => Self::Str(val.clone()),
             Self::Long(val) => Self::Long(*val),
             Self::Double(val) => Self::Double(*val),
-            // Self::Bool(val) => Self::Bool(*val),
             Self::None => Self::None,
             Self::Zval(val) => Self::Zval(val.shallow_clone()),
         }
@@ -518,7 +616,6 @@ impl From<FluentPhpValue> for FluentValue<'static> {
             FluentPhpValue::Str(val) => Self::String(val.into()),
             FluentPhpValue::Long(val) => Self::Number(val.into()),
             FluentPhpValue::Double(val) => Self::Number(val.into()),
-            // FluentPhpValue::Bool(val) => Self::Number(if val { 1 } else { 0 }.into()),
             FluentPhpValue::Zval(val) => {
                 Self::Custom(Box::new(FluentPhpZvalValue::new(val.shallow_clone())))
             }
@@ -536,8 +633,6 @@ impl FromZval<'_> for FluentPhpValue {
             FluentPhpValue::Long(zv.long().unwrap())
         } else if zv.is_double() {
             FluentPhpValue::Double(zv.double().unwrap())
-        // } else if zv.is_bool() {
-        //     FluentPhpValue::Bool(zv.bool().unwrap())
         } else if zv.is_null() {
             FluentPhpValue::None
         } else if zv.is_object() || zv.is_bool() {
@@ -558,13 +653,20 @@ impl IntoZval for FluentPhpValue {
         match self {
             Self::Str(val) => zv.set_string(&val, persistent)?,
             Self::Long(val) => zv.set_long(val),
-            // Self::Bool(val) => zv.set_bool(val),
             Self::Double(val) => zv.set_double(val),
             Self::Zval(val) => *zv = val,
             Self::None => zv.set_null(),
         };
         Ok(())
     }
+}
+
+// -- FluentBundle PHP class --
+
+#[php_class]
+#[php(name = "FluentPHP\\FluentBundle")]
+struct FluentPhpBundle {
+    bundle: FluentBundle<Arc<FluentResource>>,
 }
 
 #[php_impl]
@@ -585,19 +687,31 @@ impl FluentPhpBundle {
         Ok(Self { bundle })
     }
 
-    pub fn add_resource(&mut self, source: String) -> PhpResult<()> {
-        // Initializing resource
-        let resource = match FluentResource::try_new(source) {
-            Ok(resource) => resource,
-            Err((_resource, _error)) => {
-                return Err(FluentPhpError::from_parse_error(&_resource, _error).into())
-            }
+    pub fn add_resource(&mut self, resource: &Zval) -> PhpResult<()> {
+        let arc = if resource.is_string() {
+            let source = resource.string().ok_or_else(|| {
+                PhpException::from_class::<Exception>("Failed to read string argument.".to_string())
+            })?;
+            cache::uncached_parse_string(source).map_err(cache_error_to_php)?
+        } else if resource.is_object() {
+            let obj = resource.object().ok_or_else(|| {
+                PhpException::from_class::<Exception>("Failed to read object argument.".to_string())
+            })?;
+            let res: &FluentPhpResource = obj.extract().map_err(|_| {
+                PhpException::from_class::<Exception>(
+                    "addResource() expects a string or FluentResource instance.".to_string(),
+                )
+            })?;
+            Arc::clone(&res.inner)
+        } else {
+            return Err(PhpException::from_class::<Exception>(
+                "addResource() expects a string or FluentResource instance.".to_string(),
+            ));
         };
 
-        let bundle = &mut self.bundle;
-        match bundle.add_resource(resource) {
-            Ok(_value) => Ok(()),
-            Err(_error) => Err(FluentPhpError::from_error(_error).into()),
+        match self.bundle.add_resource(arc) {
+            Ok(_) => Ok(()),
+            Err(errors) => Err(FluentPhpError::from_error(errors).into()),
         }
     }
 
@@ -675,6 +789,8 @@ impl FluentPhpBundle {
     }
 }
 
+// -- Module info and startup --
+
 #[no_mangle]
 pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
     info_table_start!();
@@ -683,13 +799,85 @@ pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
     info_table_end!();
 }
 
+fn parse_ini_bool(s: &str) -> bool {
+    !matches!(
+        s.trim(),
+        "" | "0" | "off" | "Off" | "OFF" | "false" | "False" | "FALSE" | "no" | "No" | "NO"
+    )
+}
+
+extern "C" fn module_startup(_type: i32, module_number: i32) -> i32 {
+    IniEntryDef::register(
+        vec![
+            IniEntryDef::new(
+                "fluent.cache_enabled".to_string(),
+                "1".to_string(),
+                &IniEntryPermission::System,
+            ),
+            IniEntryDef::new(
+                "fluent.cache_max_weight".to_string(),
+                "16M".to_string(),
+                &IniEntryPermission::System,
+            ),
+            IniEntryDef::new(
+                "fluent.cache_max_entry_size".to_string(),
+                "2M".to_string(),
+                &IniEntryPermission::System,
+            ),
+            IniEntryDef::new(
+                "fluent.cache_file_validation".to_string(),
+                "metadata".to_string(),
+                &IniEntryPermission::System,
+            ),
+        ],
+        module_number,
+    );
+
+    let ini = ExecutorGlobals::get().ini_values();
+
+    let enabled = match ini.get("fluent.cache_enabled") {
+        Some(Some(v)) => parse_ini_bool(v),
+        _ => true,
+    };
+    let max_weight = ini
+        .get("fluent.cache_max_weight")
+        .and_then(|o| o.as_deref())
+        .and_then(cache::parse_memory_string);
+    let max_entry_size = ini
+        .get("fluent.cache_max_entry_size")
+        .and_then(|o| o.as_deref())
+        .and_then(cache::parse_memory_string);
+    let file_validation = ini
+        .get("fluent.cache_file_validation")
+        .and_then(|o| o.as_deref())
+        .and_then(|s| {
+            if s.eq_ignore_ascii_case("checksum") {
+                Some(cache::FileValidation::Checksum)
+            } else if s.eq_ignore_ascii_case("metadata") {
+                Some(cache::FileValidation::Metadata)
+            } else {
+                None
+            }
+        });
+
+    if cache::configure_from_ini(enabled, max_weight, max_entry_size, file_validation).is_err() {
+        return 1;
+    }
+
+    0
+}
+
 #[php_module]
+#[php(startup = module_startup)]
 pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
     module
         .class::<Exception>()
         .class::<ParserException>()
         .class::<ResolverException>()
+        .class::<CacheException>()
         .class::<FluentPhpBundle>()
+        .class::<FluentPhpResource>()
+        .class::<ResourceCache>()
         .info_function(php_module_info)
 }
 
