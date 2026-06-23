@@ -340,8 +340,10 @@ fn zval_to_fluent_value(zv: Zval) -> FluentValue<'static> {
         FluentValue::Number(zv.double().unwrap().into())
     } else if zv.is_null() {
         FluentValue::None
-    } else if zv.is_object() || zv.is_bool() {
-        FluentValue::Custom(Box::new(FluentPhpZvalValue::new(zv.shallow_clone())))
+    } else if zv.is_bool() {
+        FluentValue::Custom(Box::new(FluentPhpBoolValue(zv.bool().unwrap())))
+    } else if zv.is_object() {
+        FluentValue::Custom(Box::new(FluentPhpObjectValue::new(zv.shallow_clone())))
     } else {
         FluentValue::Error
     }
@@ -406,38 +408,40 @@ impl<T> Deref for ThreadSafeWrapper<T> {
     }
 }
 
-unsafe impl<T> Send for ThreadSafeWrapper<T> {}
+#[derive(Debug)]
+struct ThreadSafeZendCallable(ThreadSafeWrapper<ZendCallable<'static>>);
 
-unsafe impl<T> Sync for ThreadSafeWrapper<T> {}
+impl ThreadSafeZendCallable {
+    fn new(callable: ZendCallable<'static>) -> Self {
+        Self(ThreadSafeWrapper::new(callable))
+    }
+
+    fn lock(&self) -> MutexGuard<'_, ZendCallable<'static>> {
+        self.0.lock()
+    }
+}
+
+// Fluent stores functions behind `Send + Sync` trait objects. PHP callables are
+// only invoked synchronously by the PHP request thread in this extension; the
+// mutex prevents re-entrant mutable access if Fluent calls the function more
+// than once during formatting.
+unsafe impl Send for ThreadSafeZendCallable {}
+unsafe impl Sync for ThreadSafeZendCallable {}
 
 #[derive(Debug)]
-struct FluentPhpZvalValue(ThreadSafeWrapper<Zval>);
+struct FluentPhpObjectValue(ThreadSafeWrapper<Zval>);
 
-impl FluentPhpZvalValue {
-    pub fn new(zv: Zval) -> Self {
+impl FluentPhpObjectValue {
+    fn new(zv: Zval) -> Self {
         Self(ThreadSafeWrapper::new(zv))
     }
 
+    fn lock(&self) -> MutexGuard<'_, Zval> {
+        self.0.lock()
+    }
+
     fn stringify(&self) -> std::borrow::Cow<'static, str> {
-        let zval = self.0.lock();
-
-        if zval.is_string() {
-            return zval.str().unwrap().to_string().into();
-        }
-
-        if zval.is_double() || zval.is_long() {
-            return format!("{}", zval.double().unwrap()).into();
-        }
-
-        if zval.is_bool() || zval.is_true() || zval.is_false() {
-            return if zval.bool().unwrap() {
-                "true"
-            } else {
-                "false"
-            }
-            .into();
-        }
-
+        let zval = self.lock();
         if let Some(object) = zval.object() {
             if object.instance_of(ce::stringable()) {
                 let result = object.try_call_method("__toString", vec![]);
@@ -449,87 +453,70 @@ impl FluentPhpZvalValue {
             return "[Object]".into();
         }
 
-        "Failed".to_string().into()
+        "[Object]".into()
+    }
+
+    fn object_identity(&self) -> Option<(usize, u32)> {
+        let zval = self.lock();
+        zval.object()
+            .map(|object| (object.ce as usize, object.handle))
     }
 }
 
-impl Deref for FluentPhpZvalValue {
-    type Target = ThreadSafeWrapper<Zval>;
+// Fluent custom values must be `Send`, but PHP objects are raw Zend VM handles.
+// The extension formats messages synchronously inside a PHP request; objects are
+// mutex-protected and never intentionally moved to a Rust worker thread.
+unsafe impl Send for FluentPhpObjectValue {}
+unsafe impl Sync for FluentPhpObjectValue {}
 
-    fn deref(&self) -> &ThreadSafeWrapper<Zval> {
-        &self.0
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FluentPhpBoolValue(bool);
+
+impl FluentPhpBoolValue {
+    fn stringify(&self) -> std::borrow::Cow<'static, str> {
+        if self.0 { "true" } else { "false" }.into()
+    }
+
+    fn to_php_value(self) -> FluentPhpValue {
+        FluentPhpValue::Bool(self.0)
     }
 }
 
-fn compare<T>(val1: Option<T>, val2: Option<T>) -> bool
-where
-    T: PartialEq,
-{
-    match (val1, val2) {
-        (Some(val1), Some(val2)) => val1 == val2,
-        _ => false,
+impl PartialEq for FluentPhpObjectValue {
+    fn eq(&self, other: &Self) -> bool {
+        // Required by fluent-bundle's `FluentValue::Custom` equality support.
+        // Current selector resolution does not compare custom object values; use
+        // object identity here to avoid invoking PHP/Zend comparison handlers
+        // from Rust `PartialEq`.
+        self.object_identity()
+            .zip(other.object_identity())
+            .is_some_and(|(left, right)| left == right)
     }
 }
 
-impl PartialEq for FluentPhpZvalValue {
-    fn eq(&self, _other: &Self) -> bool {
-        let zv1 = self.lock();
-        let zv2 = _other.lock();
-
-        if zv1.is_null() && zv2.is_null() {
-            return true;
-        }
-
-        if zv1.is_bool() && zv2.is_bool() {
-            return zv1.is_true() == zv2.is_true();
-        }
-
-        if zv1.is_long() && zv2.is_long() {
-            return compare(zv1.long(), zv2.long());
-        }
-
-        if (zv1.is_long() || zv1.is_double()) && (zv2.is_long() || zv2.is_double()) {
-            return compare(zv1.double(), zv2.double());
-        }
-
-        if zv1.is_string() && zv2.is_string() {
-            return compare(zv1.str(), zv2.str());
-        }
-
-        if zv1.is_object() && zv2.is_object() {
-            let zo1 = zv1.object();
-            let zo2 = zv2.object();
-
-            if let (Some(zo1), Some(zo2)) = (zo1, zo2) {
-                if zo1.ce != zo2.ce {
-                    return false;
-                }
-
-                let status = unsafe {
-                    zo1.handlers
-                        .as_ref()
-                        .and_then(|handlers| handlers.compare)
-                        .map(|compare| {
-                            (compare)(
-                                zv1.deref() as *const _ as *mut _,
-                                zv2.deref() as *const _ as *mut _,
-                            )
-                        })
-                };
-
-                if let Some(status) = status {
-                    return 0 == status;
-                }
-            }
-        }
-
-        false
-    }
-}
-
-impl FluentType for FluentPhpZvalValue {
+impl FluentType for FluentPhpBoolValue {
     fn duplicate(&self) -> Box<dyn FluentType + Send> {
-        Box::new(FluentPhpZvalValue::new(self.0.lock().shallow_clone()))
+        Box::new(*self)
+    }
+
+    fn as_string(
+        &self,
+        _intls: &intl_memoizer::IntlLangMemoizer,
+    ) -> std::borrow::Cow<'static, str> {
+        self.stringify()
+    }
+
+    fn as_string_threadsafe(
+        &self,
+        _intls: &intl_memoizer::concurrent::IntlLangMemoizer,
+    ) -> std::borrow::Cow<'static, str> {
+        self.stringify()
+    }
+}
+
+impl FluentType for FluentPhpObjectValue {
+    fn duplicate(&self) -> Box<dyn FluentType + Send> {
+        Box::new(FluentPhpObjectValue::new(self.lock().shallow_clone()))
     }
 
     fn as_string(
@@ -548,6 +535,7 @@ impl FluentType for FluentPhpZvalValue {
 }
 
 enum FluentPhpValue {
+    Bool(bool),
     Double(f64),
     Long(i64),
     Str(String),
@@ -559,6 +547,8 @@ impl Display for FluentPhpValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Str(s) => write!(f, "{}", &s),
+            Self::Bool(true) => write!(f, "true"),
+            Self::Bool(false) => write!(f, "false"),
             Self::Long(n) => write!(f, "{}", n),
             Self::Double(fl) => write!(f, "{}", fl),
             Self::None => write!(f, ""),
@@ -576,6 +566,7 @@ impl Clone for FluentPhpValue {
     fn clone(&self) -> Self {
         match self {
             Self::Str(val) => Self::Str(val.clone()),
+            Self::Bool(val) => Self::Bool(*val),
             Self::Long(val) => Self::Long(*val),
             Self::Double(val) => Self::Double(*val),
             Self::None => Self::None,
@@ -593,8 +584,11 @@ impl TryFrom<&FluentValue<'_>> for FluentPhpValue {
             FluentValue::Number(n) => Self::Double(n.value),
             FluentValue::None => Self::None,
             FluentValue::Custom(val) => {
-                if let Some(val) = val.as_ref().as_any().downcast_ref::<FluentPhpZvalValue>() {
+                if let Some(val) = val.as_ref().as_any().downcast_ref::<FluentPhpObjectValue>() {
                     FluentPhpValue::Zval(val.lock().shallow_clone())
+                } else if let Some(val) = val.as_ref().as_any().downcast_ref::<FluentPhpBoolValue>()
+                {
+                    val.to_php_value()
                 } else {
                     FluentPhpValue::None
                 }
@@ -616,8 +610,9 @@ impl From<FluentPhpValue> for FluentValue<'static> {
             FluentPhpValue::Str(val) => Self::String(val.into()),
             FluentPhpValue::Long(val) => Self::Number(val.into()),
             FluentPhpValue::Double(val) => Self::Number(val.into()),
+            FluentPhpValue::Bool(val) => Self::Custom(Box::new(FluentPhpBoolValue(val))),
             FluentPhpValue::Zval(val) => {
-                Self::Custom(Box::new(FluentPhpZvalValue::new(val.shallow_clone())))
+                Self::Custom(Box::new(FluentPhpObjectValue::new(val.shallow_clone())))
             }
             FluentPhpValue::None => Self::None,
         }
@@ -635,7 +630,9 @@ impl FromZval<'_> for FluentPhpValue {
             FluentPhpValue::Double(zv.double().unwrap())
         } else if zv.is_null() {
             FluentPhpValue::None
-        } else if zv.is_object() || zv.is_bool() {
+        } else if zv.is_bool() {
+            FluentPhpValue::Bool(zv.bool().unwrap())
+        } else if zv.is_object() {
             FluentPhpValue::Zval(zv.shallow_clone())
         } else {
             return None;
@@ -652,6 +649,7 @@ impl IntoZval for FluentPhpValue {
     fn set_zval(self, zv: &mut Zval, persistent: bool) -> ext_php_rs::error::Result<()> {
         match self {
             Self::Str(val) => zv.set_string(&val, persistent)?,
+            Self::Bool(val) => zv.set_bool(val),
             Self::Long(val) => zv.set_long(val),
             Self::Double(val) => zv.set_double(val),
             Self::Zval(val) => *zv = val,
@@ -717,7 +715,7 @@ impl FluentPhpBundle {
 
     pub fn add_function(&mut self, fn_name: String, callable: &Zval) -> PhpResult<()> {
         let callable = ZendCallable::new_owned(callable.shallow_clone()).unwrap();
-        let callable = ThreadSafeWrapper::new(callable);
+        let callable = ThreadSafeZendCallable::new(callable);
 
         let status = self
             .bundle
