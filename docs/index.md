@@ -58,7 +58,7 @@ Hello, John!
 ## Requirements
 
 - PHP 8.0 or newer
-- Rust 1.80 or newer
+- Rust 1.85 or newer
 - A C/C++ build toolchain
 - `libclang` headers for `ext-php-rs`
 

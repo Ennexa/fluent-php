@@ -7,7 +7,7 @@ use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start,
     prelude::*,
-    zend::{ce, ExecutorGlobals, IniEntryDef, ModuleEntry},
+    zend::{ExecutorGlobals, IniEntryDef, ModuleEntry, ce},
 };
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, Range};
@@ -373,7 +373,7 @@ impl<'a> TryFrom<&ZendHashTable> for FluentPhpArgs<'a> {
                         "Unsupported type for argument \"{}\": {}.",
                         key,
                         elem.get_type()
-                    )))
+                    )));
                 }
             };
             args.set(key.to_string(), value);
@@ -596,7 +596,7 @@ impl TryFrom<&FluentValue<'_>> for FluentPhpValue {
             FluentValue::Error => {
                 return Err(FluentPhpError::Message(
                     "Unsupported variable type".to_string(),
-                ))
+                ));
             }
         };
 
@@ -675,7 +675,7 @@ impl FluentPhpBundle {
             Err(_e) => {
                 return Err(PhpException::from_class::<Exception>(
                     "Invalid language identifier.".to_string(),
-                ))
+                ));
             }
         };
 
@@ -756,7 +756,7 @@ impl FluentPhpBundle {
                 return Err(PhpException::from_class::<Exception>(format!(
                     "Message \"{}\" not found.",
                     msg_id
-                )))
+                )));
             }
         };
 
@@ -767,7 +767,7 @@ impl FluentPhpBundle {
                 return Err(PhpException::from_class::<Exception>(format!(
                     "Message \"{}\" has no value.",
                     msg_id
-                )))
+                )));
             }
         };
 
@@ -789,7 +789,7 @@ impl FluentPhpBundle {
 
 // -- Module info and startup --
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn php_module_info(_module: *mut ModuleEntry) {
     info_table_start!();
     info_table_row!("Fluent", "enabled");

@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Reduced `unsafe` code in the extension internals.
+- Migrated the crate to the Rust 2024 edition and raised the minimum supported
+  Rust version to 1.85 (affects building from source only; the compiled
+  extension and its PHP API are unchanged).
 - CI: added dependency caching, linting, and testing; build matrix across
   PHP 8.2–8.5 (NTS and TS) and multiple targets.
 

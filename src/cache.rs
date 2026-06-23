@@ -665,9 +665,11 @@ mod tests {
 
         assert!(cache.lookup_string(&first_key).is_none());
         assert!(cache.lookup_string(&second_key).is_some());
-        assert!(cache
-            .lookup_file_by_content(&file_path, None, 11, 0xfeed)
-            .is_some());
+        assert!(
+            cache
+                .lookup_file_by_content(&file_path, None, 11, 0xfeed)
+                .is_some()
+        );
         assert_eq!(cache.entries.len(), 2);
         assert_eq!(cache.current_weight, 8);
         assert_eq!(cache.string_entries, 1);
@@ -680,9 +682,11 @@ mod tests {
         let path = normalize_path(Path::new("alpha/./beta/../gamma"));
 
         assert!(path.ends_with(Path::new("alpha").join("gamma")));
-        assert!(!path
-            .components()
-            .any(|component| matches!(component, Component::CurDir | Component::ParentDir)));
+        assert!(
+            !path
+                .components()
+                .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        );
     }
 
     #[test]
