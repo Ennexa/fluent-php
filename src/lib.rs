@@ -24,13 +24,13 @@ mod cache;
 // -- Exception classes --
 
 #[php_class]
-#[php(name = "FluentPHP\\Exception")]
+#[php(name = "FluentPhp\\Exception")]
 #[php(extends(ce = ce::exception, stub = "\\Exception"))]
 #[derive(Default)]
 struct Exception;
 
 #[php_class]
-#[php(name = "FluentPHP\\ParserException")]
+#[php(name = "FluentPhp\\ParserException")]
 #[php(extends(Exception))]
 #[derive(Default)]
 struct ParserException {
@@ -56,7 +56,7 @@ impl ParserException {
 }
 
 #[php_class]
-#[php(name = "FluentPHP\\ResolverException")]
+#[php(name = "FluentPhp\\ResolverException")]
 #[php(extends(Exception))]
 #[derive(Default)]
 struct ResolverException {
@@ -73,7 +73,7 @@ impl ResolverException {
 }
 
 #[php_class]
-#[php(name = "FluentPHP\\CacheException")]
+#[php(name = "FluentPhp\\CacheException")]
 #[php(extends(Exception))]
 #[derive(Default)]
 struct CacheException;
@@ -263,7 +263,7 @@ impl FluentPhpParseError {
 // -- FluentResource PHP class --
 
 #[php_class]
-#[php(name = "FluentPHP\\FluentResource")]
+#[php(name = "FluentPhp\\FluentResource")]
 struct FluentPhpResource {
     inner: Arc<FluentResource>,
 }
@@ -285,7 +285,7 @@ impl FluentPhpResource {
 // -- ResourceCache PHP class --
 
 #[php_class]
-#[php(name = "FluentPHP\\ResourceCache")]
+#[php(name = "FluentPhp\\ResourceCache")]
 #[derive(Default)]
 struct ResourceCache;
 
@@ -662,7 +662,7 @@ impl IntoZval for FluentPhpValue {
 // -- FluentBundle PHP class --
 
 #[php_class]
-#[php(name = "FluentPHP\\FluentBundle")]
+#[php(name = "FluentPhp\\FluentBundle")]
 struct FluentPhpBundle {
     bundle: FluentBundle<Arc<FluentResource>>,
 }

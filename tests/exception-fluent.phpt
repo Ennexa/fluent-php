@@ -66,21 +66,21 @@ try {
 ===DONE===
 --EXPECT--
 --- 1: invalid language identifier ---
-FluentPHP\Exception
+FluentPhp\Exception
 Invalid language identifier.
 --- 2: not a ParserException ---
 correctly not a ParserException
 --- 3: missing message ID ---
-FluentPHP\Exception
+FluentPhp\Exception
 Message "missing" not found.
 --- 4: attribute-only message has no value ---
 bool(true)
-FluentPHP\Exception
+FluentPhp\Exception
 Message "user" has no value.
 --- 5: unsupported argument type array ---
-FluentPHP\Exception
+FluentPhp\Exception
 Unsupported type for argument "value": Array.
 --- 6: unsupported argument type resource ---
-FluentPHP\Exception
+FluentPhp\Exception
 Unsupported type for argument "value": Resource.
 ===DONE===

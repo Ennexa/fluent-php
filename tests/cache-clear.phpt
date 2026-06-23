@@ -2,21 +2,21 @@
 ResourceCache: clear() resets all entries and stats
 --FILE--
 <?php
-FluentPHP\ResourceCache::clear();
+FluentPhp\ResourceCache::clear();
 
 $resource = <<<'FTL'
     hello = Hello!
     FTL;
 
-FluentPHP\ResourceCache::fromString($resource);
+FluentPhp\ResourceCache::fromString($resource);
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "before clear - misses: ", $stats['misses'], PHP_EOL;
 echo "before clear - entries: ", $stats['entries'], PHP_EOL;
 
-FluentPHP\ResourceCache::clear();
+FluentPhp\ResourceCache::clear();
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "after clear - hits: ", $stats['hits'], PHP_EOL;
 echo "after clear - misses: ", $stats['misses'], PHP_EOL;
 echo "after clear - entries: ", $stats['entries'], PHP_EOL;

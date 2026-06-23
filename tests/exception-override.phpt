@@ -48,16 +48,16 @@ try {
 ===DONE===
 --EXPECT--
 --- 1: duplicate message ---
-FluentPHP\Exception
+FluentPhp\Exception
 Attempt to override an existing message: "hello".
 --- 2: duplicate term ---
-FluentPHP\Exception
+FluentPhp\Exception
 Attempt to override an existing term: "brand".
 --- 3: duplicate function ---
-FluentPHP\Exception
+FluentPhp\Exception
 Attempt to override an existing function: "MY_FUNC".
 --- 4: multiple duplicate IDs ---
-FluentPHP\Exception
+FluentPhp\Exception
 Attempt to override existing entries: "hello", "world".
 bool(true)
 bool(true)

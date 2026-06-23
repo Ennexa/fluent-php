@@ -66,23 +66,23 @@ try {
 ===DONE===
 --EXPECT--
 --- 1: missing variable ---
-FluentPHP\ResolverException
+FluentPhp\ResolverException
 Resolution failed with error: Unknown variable: $value
 int(1)
 string(24) "Unknown variable: $value"
 --- 2: unknown function ---
-FluentPHP\ResolverException
+FluentPhp\ResolverException
 Resolution failed with error: Unknown function: UNKNOWN_FUNC()
 int(1)
 string(32) "Unknown function: UNKNOWN_FUNC()"
 --- 3: multiple resolver errors ---
-FluentPHP\ResolverException
+FluentPhp\ResolverException
 Resolution failed with 2 errors: Unknown variable: $missing; Unknown function: UNKNOWN_FUNC()
 int(2)
 string(26) "Unknown variable: $missing"
 string(32) "Unknown function: UNKNOWN_FUNC()"
 --- 4: getMessage() truncates beyond 3 errors ---
-FluentPHP\ResolverException
+FluentPhp\ResolverException
 Resolution failed with 4 errors: Unknown variable: $a; Unknown variable: $b; Unknown variable: $c; and 1 more
 int(4)
 --- 5: caught as Exception ---

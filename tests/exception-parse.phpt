@@ -47,10 +47,10 @@ try {
 ===DONE===
 --EXPECT--
 --- 1: single parse error ---
-FluentPHP\ParserException
+FluentPhp\ParserException
 Parse error: Line 1, col 0: Expected one of "a-zA-Z" - "= invalid-top-level"
 --- 2: caught as Exception ---
-FluentPHP\ParserException
+FluentPhp\ParserException
 --- 3: multiple parse errors with getErrors() ---
 Parse errors:
   - Line 1, col 0: Expected one of "a-zA-Z" - "= error one"

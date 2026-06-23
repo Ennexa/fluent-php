@@ -2,15 +2,15 @@
 ResourceCache: parse failures update error stats without caching entries
 --FILE--
 <?php
-FluentPHP\ResourceCache::clear();
+FluentPhp\ResourceCache::clear();
 
 try {
-    FluentPHP\ResourceCache::fromString("= invalid-top-level");
-} catch (FluentPHP\ParserException $e) {
+    FluentPhp\ResourceCache::fromString("= invalid-top-level");
+} catch (FluentPhp\ParserException $e) {
     echo get_class($e), PHP_EOL;
 }
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "entries: ", $stats['entries'], PHP_EOL;
 echo "misses: ", $stats['misses'], PHP_EOL;
 echo "loads: ", $stats['loads'], PHP_EOL;
@@ -18,7 +18,7 @@ echo "errors: ", $stats['errors'], PHP_EOL;
 ?>
 ===DONE===
 --EXPECT--
-FluentPHP\ParserException
+FluentPhp\ParserException
 entries: 0
 misses: 1
 loads: 0

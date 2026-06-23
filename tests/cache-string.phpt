@@ -2,20 +2,20 @@
 ResourceCache: string-based caching shows hits on repeated fromString
 --FILE--
 <?php
-FluentPHP\ResourceCache::clear();
+FluentPhp\ResourceCache::clear();
 
 $resource = <<<'FTL'
     hello = Hello, world!
     FTL;
 
-$r1 = FluentPHP\ResourceCache::fromString($resource);
-$r2 = FluentPHP\ResourceCache::fromString($resource);
+$r1 = FluentPhp\ResourceCache::fromString($resource);
+$r2 = FluentPhp\ResourceCache::fromString($resource);
 
-$bundle = new FluentPHP\FluentBundle('en');
+$bundle = new FluentPhp\FluentBundle('en');
 $bundle->addResource($r1);
 echo $bundle->formatPattern('hello', []), PHP_EOL;
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "hits: ", $stats['hits'], PHP_EOL;
 echo "misses: ", $stats['misses'], PHP_EOL;
 echo "loads: ", $stats['loads'], PHP_EOL;

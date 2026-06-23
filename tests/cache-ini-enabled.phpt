@@ -8,13 +8,13 @@ $resource = <<<'FTL'
     msg = Hello from INI test
     FTL;
 
-$r = FluentPHP\ResourceCache::fromString($resource);
+$r = FluentPhp\ResourceCache::fromString($resource);
 
-$bundle = new FluentPHP\FluentBundle('en');
+$bundle = new FluentPhp\FluentBundle('en');
 $bundle->addResource($r);
 echo $bundle->formatPattern('msg', []), PHP_EOL;
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "entries: ", $stats['entries'], PHP_EOL;
 ?>
 ===DONE===

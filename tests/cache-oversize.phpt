@@ -4,19 +4,19 @@ ResourceCache: oversized entry is returned but not cached
 fluent.cache_max_entry_size=10
 --FILE--
 <?php
-FluentPHP\ResourceCache::clear();
+FluentPhp\ResourceCache::clear();
 
 $resource = <<<'FTL'
     greeting = Hello, this is a long enough message to exceed 10 bytes!
     FTL;
 
-$r = FluentPHP\ResourceCache::fromString($resource);
+$r = FluentPhp\ResourceCache::fromString($resource);
 
-$bundle = new FluentPHP\FluentBundle('en');
+$bundle = new FluentPhp\FluentBundle('en');
 $bundle->addResource($r);
 echo $bundle->formatPattern('greeting', []), PHP_EOL;
 
-$stats = FluentPHP\ResourceCache::getStats();
+$stats = FluentPhp\ResourceCache::getStats();
 echo "entries: ", $stats['entries'], PHP_EOL;
 echo "loads: ", $stats['loads'], PHP_EOL;
 echo "skipped_oversize: ", $stats['skipped_oversize'], PHP_EOL;
