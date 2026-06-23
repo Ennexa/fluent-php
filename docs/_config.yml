@@ -1,0 +1,48 @@
+title: FluentPHP
+description: >-
+  FluentPHP — PHP bindings for the Fluent localization system. Format
+  localized, natural-sounding messages with variables, plurals, and other
+  variants, and extend them with your own PHP functions.
+
+theme: just-the-docs
+
+# Project site lives at https://<owner>.github.io/fluent-php/
+# Adjust `url`/`baseurl` if the repository name or owner differs.
+url: https://ennexa.github.io
+baseurl: "/fluent-php"
+
+color_scheme: light
+search_enabled: true
+heading_anchors: true
+
+# Apply the theme's `default` layout to every page. Without this, pages that
+# have front matter but no explicit `layout:` are rendered with no layout at
+# all (raw content, no <head>/CSS/sidebar).
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+aux_links:
+  GitHub:
+    - https://github.com/Ennexa/fluent-php
+aux_links_new_tab: true
+
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: yellow
+
+footer_content: >-
+  FluentPHP — PHP bindings for Project Fluent's Rust implementation.
+  Licensed GPL-3.0.
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - _legacy/

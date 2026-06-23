@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="fluent-php is a PHP extension for Mozilla Project Fluent, backed by Rust.">
+  <title>fluent-php</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #53606f;
+      --line: #d9e1e8;
+      --soft: #f4f7f9;
+      --panel: #ffffff;
+      --blue: #1f6feb;
+      --green: #16835f;
+      --red: #b42318;
+      --amber: #a15c07;
+      --code: #102033;
+      --code-soft: #172b42;
+      --code-line: #2c4058;
+      --shadow: 0 18px 45px rgba(16, 32, 51, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      color: var(--ink);
+      background: #ffffff;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+    }
+
+    .nav {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 64px;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .mark {
+      width: 32px;
+      height: 32px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid #bed0df;
+      border-radius: 8px;
+      background: #e9f3ee;
+      color: var(--green);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 14px;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 650;
+      text-decoration: none;
+      box-shadow: 0 2px 8px rgba(16, 32, 51, 0.04);
+    }
+
+    .button.primary {
+      border-color: #155f45;
+      background: var(--green);
+      color: #ffffff;
+    }
+
+    .button:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+
+    .hero {
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, #f6faf8 0%, #ffffff 68%),
+        #ffffff;
+    }
+
+    .hero-inner {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 72px 0 54px;
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+      gap: 44px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.12;
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 720px;
+      font-size: clamp(42px, 6vw, 76px);
+    }
+
+    h2 {
+      font-size: clamp(30px, 4vw, 44px);
+    }
+
+    h3 {
+      font-size: 21px;
+    }
+
+    .lead {
+      max-width: 690px;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .signals {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .signal {
+      min-height: 86px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .signal strong {
+      display: block;
+      font-size: 18px;
+    }
+
+    .signal span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .terminal {
+      overflow: hidden;
+      border: 1px solid #23374d;
+      border-radius: 8px;
+      background: var(--code);
+      box-shadow: var(--shadow);
+    }
+
+    .terminal-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 42px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--code-line);
+      color: #b8c7d9;
+      font-size: 13px;
+    }
+
+    .dots {
+      display: flex;
+      gap: 7px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #8492a6;
+    }
+
+    .dot.red {
+      background: #ef6b63;
+    }
+
+    .dot.amber {
+      background: #f3b84d;
+    }
+
+    .dot.green {
+      background: #57c785;
+    }
+
+    pre {
+      margin: 0;
+      padding: 20px;
+      overflow-x: auto;
+      background: var(--code);
+      color: #dbe7f3;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.95em;
+    }
+
+    .kw {
+      color: #80d6ff;
+    }
+
+    .str {
+      color: #9fe6b8;
+    }
+
+    .fn {
+      color: #ffd166;
+    }
+
+    .var {
+      color: #ffb4a2;
+    }
+
+    .comment {
+      color: #8ba3bd;
+    }
+
+    main {
+      background: #ffffff;
+    }
+
+    .section {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-inner {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 64px 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .section-head p {
+      max-width: 620px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .use-case-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border: 1px solid #c6d8e9;
+      border-radius: 999px;
+      color: #24547d;
+      background: #eef6ff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .example-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.82fr) minmax(420px, 1.18fr);
+      gap: 24px;
+      align-items: start;
+      margin-top: 24px;
+    }
+
+    .example-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .example-item {
+      display: block;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      background: #ffffff;
+    }
+
+    .example-item:hover {
+      text-decoration: none;
+      border-color: #9db7d0;
+    }
+
+    .example-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .example-item span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 112px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .flow-step::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -10px;
+      width: 10px;
+      height: 1px;
+      background: var(--line);
+    }
+
+    .flow-step:last-child::after {
+      display: none;
+    }
+
+    .flow-step b {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .flow-step span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+      background: #ffffff;
+    }
+
+    .config-table th,
+    .config-table td {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .config-table th {
+      background: var(--soft);
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .config-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.82fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .note {
+      padding: 18px;
+      border: 1px solid #efcf91;
+      border-radius: 8px;
+      background: #fff8eb;
+      color: #533208;
+    }
+
+    .footer {
+      background: #102033;
+      color: #dbe7f3;
+    }
+
+    .footer-inner {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      color: #b8c7d9;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #dbe7f3;
+    }
+
+    @media (max-width: 940px) {
+      .nav {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 14px 0;
+      }
+
+      .nav-links {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .hero-inner,
+      .example-grid,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-inner {
+        padding-top: 48px;
+      }
+
+      .use-case-grid,
+      .signals,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .section-inner {
+        padding: 48px 0;
+      }
+
+      .section-head {
+        display: block;
+      }
+
+      .section-head p {
+        margin-top: 12px;
+      }
+
+      .hero-actions {
+        display: grid;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      pre {
+        font-size: 13px;
+        padding: 16px;
+      }
+
+      .footer-inner {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="fluent-php home">
+        <span class="mark">ftl</span>
+        <span>fluent-php</span>
+      </a>
+      <div class="nav-links">
+        <a href="#use-cases">Use Cases</a>
+        <a href="#examples">Examples</a>
+        <a href="#cache">Cache</a>
+        <a href="#build">Build</a>
+        <a class="button" href="https://github.com/Ennexa/fluent-php">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <section class="hero" id="top">
+    <div class="hero-inner">
+      <div>
+        <p class="eyebrow">PHP extension for Project Fluent</p>
+        <h1>Fluent translations with Rust-backed parsing for PHP.</h1>
+        <p class="lead">
+          Parse FTL resources, format localized messages, register PHP
+          functions, and reuse parsed resources across requests in long-running
+          PHP processes.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#examples">View Examples</a>
+          <a class="button" href="#build">Build Extension</a>
+        </div>
+        <div class="signals" aria-label="Project highlights">
+          <div class="signal">
+            <strong>PHP API</strong>
+            <span>Bundles, resources, functions, exceptions</span>
+          </div>
+          <div class="signal">
+            <strong>Rust core</strong>
+            <span>Uses Mozilla's Fluent implementation</span>
+          </div>
+          <div class="signal">
+            <strong>Process cache</strong>
+            <span>Optional LRU cache for parsed resources</span>
+          </div>
+        </div>
+      </div>
+      <div class="terminal" aria-label="Quick fluent-php example">
+        <div class="terminal-top">
+          <div class="dots" aria-hidden="true">
+            <span class="dot red"></span>
+            <span class="dot amber"></span>
+            <span class="dot green"></span>
+          </div>
+          <span>hello.php</span>
+        </div>
+        <pre><code><span class="kw">&lt;?php</span>
+
+<span class="var">$resource</span> = <span class="str">&lt;&lt;&lt;'FTL'
+hello = Hello, { $name }!
+FTL</span>;
+
+<span class="var">$bundle</span> = <span class="kw">new</span> FluentPHP\FluentBundle(<span class="str">'en'</span>);
+<span class="var">$bundle</span>-&gt;<span class="fn">addResource</span>(<span class="var">$resource</span>);
+
+<span class="kw">echo</span> <span class="var">$bundle</span>-&gt;<span class="fn">formatPattern</span>(
+    <span class="str">'hello'</span>,
+    [<span class="str">'name'</span> =&gt; <span class="str">'John'</span>]
+), PHP_EOL;</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="section" id="use-cases">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2>Use Cases</h2>
+          <p>
+            fluent-php keeps localization logic close to PHP while letting
+            Fluent handle selectors, variables, and reusable message resources.
+          </p>
+        </div>
+        <div class="use-case-grid">
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Applications</span>
+              <h3>Localize product UI</h3>
+              <p>
+                Store copy in `.ftl` files and format messages with request
+                data, user names, counters, and application state.
+              </p>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Content</span>
+              <h3>Handle variants</h3>
+              <p>
+                Use Fluent selectors for statuses, flags, counts, and other
+                branch-heavy messages without scattering conditionals in PHP.
+              </p>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Performance</span>
+              <h3>Reuse parsed resources</h3>
+              <p>
+                Cache parsed FTL in each PHP-FPM worker so repeated requests
+                avoid reparsing stable translation files.
+              </p>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Formatting</span>
+              <h3>Call PHP functions</h3>
+              <p>
+                Register PHP callables for project-specific date, number,
+                label, and domain formatting.
+              </p>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Validation</span>
+              <h3>Surface parse errors</h3>
+              <p>
+                Catch parser and resolver exceptions with structured error
+                details for tests, deploy checks, or admin tools.
+              </p>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-body">
+              <span class="tag">Tooling</span>
+              <h3>Preprocess FTL</h3>
+              <p>
+                Transform generated FTL strings before parsing; cache identity
+                follows final source content.
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="examples">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2>Examples</h2>
+          <p>
+            These examples match the extension API: resources are parsed,
+            attached to bundles, and then formatted by message id.
+          </p>
+        </div>
+        <div class="example-grid">
+          <div class="example-list">
+            <a class="example-item" href="#basic">
+              <strong>Variables</strong>
+              <span>Inject request data into localized messages.</span>
+            </a>
+            <a class="example-item" href="#selectors">
+              <strong>Selectors</strong>
+              <span>Choose message variants from values.</span>
+            </a>
+            <a class="example-item" href="#functions">
+              <strong>PHP functions</strong>
+              <span>Expose application formatters to Fluent.</span>
+            </a>
+            <a class="example-item" href="#files">
+              <strong>Cached files</strong>
+              <span>Reuse parsed file resources inside a process.</span>
+            </a>
+          </div>
+          <div class="terminal" id="basic" aria-label="Variable example">
+            <div class="terminal-top">
+              <div class="dots" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+              </div>
+              <span>variables.php</span>
+            </div>
+            <pre><code><span class="var">$bundle</span> = <span class="kw">new</span> FluentPHP\FluentBundle(<span class="str">'en'</span>);
+<span class="var">$bundle</span>-&gt;<span class="fn">addResource</span>(<span class="str">'welcome = Welcome, { $user }'</span> . <span class="str">"\n"</span>);
+
+<span class="kw">echo</span> <span class="var">$bundle</span>-&gt;<span class="fn">formatPattern</span>(<span class="str">'welcome'</span>, [
+    <span class="str">'user'</span> =&gt; <span class="str">'Asha'</span>,
+]);</code></pre>
+          </div>
+        </div>
+
+        <div class="example-grid" id="selectors">
+          <div class="card">
+            <div class="card-body">
+              <h3>Selectors keep copy rules in FTL</h3>
+              <p>
+                Instead of branching in controllers, keep the variants beside
+                the translated text. Translators can adjust wording without PHP
+                code changes.
+              </p>
+            </div>
+          </div>
+          <div class="terminal" aria-label="Selector example">
+            <div class="terminal-top">
+              <div class="dots" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+              </div>
+              <span>selectors.php</span>
+            </div>
+            <pre><code><span class="var">$bundle</span>-&gt;<span class="fn">addResource</span>(<span class="str">&lt;&lt;&lt;'FTL'
+status = { $state -&gt;
+    [active] Account active
+    [blocked] Account blocked
+   *[other] Status unknown
+}
+FTL</span>);
+
+<span class="kw">echo</span> <span class="var">$bundle</span>-&gt;<span class="fn">formatPattern</span>(<span class="str">'status'</span>, [
+    <span class="str">'state'</span> =&gt; <span class="str">'active'</span>,
+]);</code></pre>
+          </div>
+        </div>
+
+        <div class="example-grid" id="functions">
+          <div class="card">
+            <div class="card-body">
+              <h3>Use existing PHP formatters</h3>
+              <p>
+                Callables let messages use domain-specific formatting without
+                forcing that logic into translation files.
+              </p>
+            </div>
+          </div>
+          <div class="terminal" aria-label="Function example">
+            <div class="terminal-top">
+              <div class="dots" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+              </div>
+              <span>functions.php</span>
+            </div>
+            <pre><code><span class="var">$bundle</span>-&gt;<span class="fn">addResource</span>(<span class="str">&lt;&lt;&lt;'FTL'
+today = Today is { FORMAT_DATE($date) }
+FTL</span>);
+
+<span class="var">$bundle</span>-&gt;<span class="fn">addFunction</span>(<span class="str">'FORMAT_DATE'</span>, <span class="kw">function</span> (DateTimeInterface <span class="var">$date</span>): string {
+    <span class="kw">return</span> <span class="var">$date</span>-&gt;<span class="fn">format</span>(<span class="str">'Y-m-d'</span>);
+});</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="cache">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2>Process-Local Cache</h2>
+          <p>
+            ResourceCache is designed for PHP-FPM and other long-running PHP
+            processes. Each process owns its own independent LRU cache.
+          </p>
+        </div>
+        <div class="flow" aria-label="Cache flow">
+          <div class="flow-step">
+            <b>FTL file</b>
+            <span>Load by canonical file path or source content.</span>
+          </div>
+          <div class="flow-step">
+            <b>ResourceCache</b>
+            <span>Find a cached resource or parse a new one.</span>
+          </div>
+          <div class="flow-step">
+            <b>FluentResource</b>
+            <span>Share the parsed resource across bundles.</span>
+          </div>
+          <div class="flow-step">
+            <b>FluentBundle</b>
+            <span>Add resources for the request locale.</span>
+          </div>
+          <div class="flow-step">
+            <b>Message</b>
+            <span>Format by id with PHP arguments.</span>
+          </div>
+        </div>
+
+        <div class="split" id="files" style="margin-top: 28px;">
+          <div class="terminal" aria-label="Cache file example">
+            <div class="terminal-top">
+              <div class="dots" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+              </div>
+              <span>cached-resource.php</span>
+            </div>
+            <pre><code><span class="var">$resource</span> = FluentPHP\ResourceCache::<span class="fn">fromFile</span>(
+    __DIR__ . <span class="str">'/messages.ftl'</span>
+);
+
+<span class="var">$bundle</span> = <span class="kw">new</span> FluentPHP\FluentBundle(<span class="str">'en'</span>);
+<span class="var">$bundle</span>-&gt;<span class="fn">addResource</span>(<span class="var">$resource</span>);
+
+<span class="kw">echo</span> <span class="var">$bundle</span>-&gt;<span class="fn">formatPattern</span>(<span class="str">'checkout-title'</span>, []);
+
+<span class="comment">// After deploys or translation updates:</span>
+FluentPHP\ResourceCache::<span class="fn">invalidateFile</span>(
+    __DIR__ . <span class="str">'/messages.ftl'</span>
+);</code></pre>
+          </div>
+          <div>
+            <table class="config-table">
+              <thead>
+                <tr>
+                  <th>INI Setting</th>
+                  <th>Default</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>fluent.cache_enabled</code></td>
+                  <td><code>1</code></td>
+                  <td>Enable or disable ResourceCache.</td>
+                </tr>
+                <tr>
+                  <td><code>fluent.cache_max_weight</code></td>
+                  <td><code>16M</code></td>
+                  <td>Approximate total cache size.</td>
+                </tr>
+                <tr>
+                  <td><code>fluent.cache_max_entry_size</code></td>
+                  <td><code>2M</code></td>
+                  <td>Maximum approximate size for one entry.</td>
+                </tr>
+                <tr>
+                  <td><code>fluent.cache_file_validation</code></td>
+                  <td><code>metadata</code></td>
+                  <td>Use <code>metadata</code> for speed or <code>checksum</code> for stronger change detection.</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="note">
+              Invalidation after deleting a file is best-effort. The extension
+              canonicalizes the nearest existing parent directory, which covers
+              common symlinked prefixes such as macOS <code>/tmp</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="build">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2>Build and Test</h2>
+          <p>
+            fluent-php currently builds as a Rust <code>cdylib</code> PHP
+            extension. Load the produced library through PHP's
+            <code>extension</code> ini directive.
+          </p>
+        </div>
+        <div class="split">
+          <div class="terminal" aria-label="Build commands">
+            <div class="terminal-top">
+              <div class="dots" aria-hidden="true">
+                <span class="dot red"></span>
+                <span class="dot amber"></span>
+                <span class="dot green"></span>
+              </div>
+              <span>terminal</span>
+            </div>
+            <pre><code><span class="comment"># Build debug extension</span>
+cargo build
+
+<span class="comment"># Run an example on Linux</span>
+php -d extension=target/debug/libfluent.so example/hello-world.php
+
+<span class="comment"># Run an example on macOS</span>
+php -d extension=target/debug/libfluent.dylib example/hello-world.php
+
+<span class="comment"># PHPT suite</span>
+php run-tests.php -n -d extension=target/debug/libfluent.so tests</code></pre>
+          </div>
+          <div class="card">
+            <div class="card-body">
+              <h3>Requirements</h3>
+              <p>PHP 8.0 or newer, Rust 1.80 or newer, a C/C++ toolchain, and libclang headers for ext-php-rs.</p>
+              <h3 style="margin-top: 22px;">Exception model</h3>
+              <p>Parser, resolver, and cache errors extend <code>FluentPHP\Exception</code>, with structured details available from parser and resolver exceptions.</p>
+              <h3 style="margin-top: 22px;">License</h3>
+              <p>GPL-3.0. See the repository license for details.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>fluent-php: PHP bindings for Project Fluent's Rust implementation.</span>
+      <span><a href="https://github.com/Ennexa/fluent-php">GitHub</a> · <a href="#top">Back to top</a></span>
+    </div>
+  </footer>
+</body>
+</html>
