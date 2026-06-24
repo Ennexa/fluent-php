@@ -11,7 +11,7 @@ optionally reusing parsed resources through an in-memory cache.
 ## Status
 
 The public API is small, stable, and covered by PHPT tests, and is used in
-production. Packaging and installation are still manual.
+production.
 
 ## Requirements
 
@@ -227,7 +227,7 @@ cargo test --lib
 cargo clippy --lib -- -D warnings
 ```
 
-Run PHPT tests against a built extension:
+Run PHP test suite against a built extension:
 
 ```sh
 cargo build
@@ -252,17 +252,12 @@ The [`example/`](example/) directory contains runnable PHP examples:
 
 ## Project Page
 
-The GitHub Pages site is a Jekyll site (using the
-[just-the-docs](https://just-the-docs.com/) theme) under [`docs/`](docs/):
+The GitHub Pages site is a Jekyll site under [`docs/`](docs/):
 
 - `index.md` — overview and quick start
 - `guide.md` — use cases and examples
 - `api-reference.md` — full API
 - `cache.md` — process cache and ini settings
-
-It is built and deployed by the
-[`pages.yml`](.github/workflows/pages.yml) workflow. To enable publishing, set
-**Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
 
 To preview locally:
 
@@ -271,13 +266,6 @@ cd docs
 bundle install
 bundle exec jekyll serve --baseurl ''
 ```
-
-The `--baseurl ''` override is needed for local preview: `_config.yml` sets a
-`baseurl` for the deployed project page, and without overriding it the theme's
-CSS/JS resolve under that prefix and won't load at `http://localhost:4000/`.
-
-The previous hand-written HTML landing page is kept (unbuilt) at
-`docs/_legacy/index.html`.
 
 ## License
 
