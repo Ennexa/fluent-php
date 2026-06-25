@@ -83,7 +83,10 @@ struct CacheException;
 #[derive(Debug)]
 enum FluentPhpError {
     ParseError(Vec<FluentPhpParseError>),
-    ResolverError(Vec<FluentError>),
+    ResolverError {
+        msg_id: String,
+        errors: Vec<FluentError>,
+    },
     Message(String),
 }
 
@@ -138,14 +141,17 @@ impl Display for FluentPhpError {
                     Ok(())
                 }
             }
-            FluentPhpError::ResolverError(errs) => {
-                let count = errs.len();
+            FluentPhpError::ResolverError { msg_id, errors } => {
+                let count = errors.len();
                 let label = if count == 1 {
-                    "Resolution failed with error: ".to_string()
+                    format!("Resolution failed for message \"{}\" with error: ", msg_id)
                 } else {
-                    format!("Resolution failed with {} errors: ", count)
+                    format!(
+                        "Resolution failed for message \"{}\" with {} errors: ",
+                        msg_id, count
+                    )
                 };
-                let mut parts: Vec<String> = errs.iter().take(3).map(resolver_inner).collect();
+                let mut parts: Vec<String> = errors.iter().take(3).map(resolver_inner).collect();
                 if count > 3 {
                     parts.push(format!("and {} more", count - 3));
                 }
@@ -171,7 +177,10 @@ impl From<FluentPhpError> for PhpException {
                 };
                 PhpException::default(message).with_object(obj.into_zval(true).unwrap())
             }
-            FluentPhpError::ResolverError(fluent_errors) => {
+            FluentPhpError::ResolverError {
+                errors: fluent_errors,
+                ..
+            } => {
                 let errors = fluent_errors.iter().map(resolver_inner).collect();
                 let obj = ResolverException {
                     message: message.clone(),
@@ -776,7 +785,7 @@ impl FluentPhpBundle {
             .format_pattern(pattern, Some(&args), &mut errors);
 
         if !errors.is_empty() {
-            return Err(FluentPhpError::ResolverError(errors).into());
+            return Err(FluentPhpError::ResolverError { msg_id, errors }.into());
         }
 
         Ok(value.into_owned())

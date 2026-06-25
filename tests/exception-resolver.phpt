@@ -67,23 +67,23 @@ try {
 --EXPECT--
 --- 1: missing variable ---
 FluentPhp\ResolverException
-Resolution failed with error: Unknown variable: $value
+Resolution failed for message "content" with error: Unknown variable: $value
 int(1)
 string(24) "Unknown variable: $value"
 --- 2: unknown function ---
 FluentPhp\ResolverException
-Resolution failed with error: Unknown function: UNKNOWN_FUNC()
+Resolution failed for message "content" with error: Unknown function: UNKNOWN_FUNC()
 int(1)
 string(32) "Unknown function: UNKNOWN_FUNC()"
 --- 3: multiple resolver errors ---
 FluentPhp\ResolverException
-Resolution failed with 2 errors: Unknown variable: $missing; Unknown function: UNKNOWN_FUNC()
+Resolution failed for message "content" with 2 errors: Unknown variable: $missing; Unknown function: UNKNOWN_FUNC()
 int(2)
 string(26) "Unknown variable: $missing"
 string(32) "Unknown function: UNKNOWN_FUNC()"
 --- 4: getMessage() truncates beyond 3 errors ---
 FluentPhp\ResolverException
-Resolution failed with 4 errors: Unknown variable: $a; Unknown variable: $b; Unknown variable: $c; and 1 more
+Resolution failed for message "content" with 4 errors: Unknown variable: $a; Unknown variable: $b; Unknown variable: $c; and 1 more
 int(4)
 --- 5: caught as Exception ---
 caught
