@@ -449,12 +449,12 @@ pub fn get_or_parse_file(path: &str) -> Result<Arc<FluentResource>, CacheError> 
 
     {
         let mut c = lock_cache()?;
-        if c.file_validation == FileValidation::Metadata {
-            if let Some(hit) = c.lookup_file_by_metadata(&canonical, mtime, size) {
-                c.stats.hits += 1;
-                c.stats.metadata_hits += 1;
-                return Ok(hit);
-            }
+        if c.file_validation == FileValidation::Metadata
+            && let Some(hit) = c.lookup_file_by_metadata(&canonical, mtime, size)
+        {
+            c.stats.hits += 1;
+            c.stats.metadata_hits += 1;
+            return Ok(hit);
         }
     }
 

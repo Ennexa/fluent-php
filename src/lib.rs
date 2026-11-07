@@ -102,7 +102,7 @@ impl FluentPhpError {
 
     fn from_error(errors: Vec<FluentError>) -> Self {
         if errors.len() == 1 {
-            return Self::Message(format!("{}", &errors[0]));
+            return Self::Message(format!("{}", errors[0]));
         }
 
         let ids = errors
@@ -157,7 +157,7 @@ impl Display for FluentPhpError {
                 }
                 write!(f, "{}{}", label, parts.join("; "))
             }
-            FluentPhpError::Message(err) => write!(f, "{}", &err),
+            FluentPhpError::Message(err) => write!(f, "{}", err),
         }
     }
 }
@@ -555,7 +555,7 @@ enum FluentPhpValue {
 impl Display for FluentPhpValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Str(s) => write!(f, "{}", &s),
+            Self::Str(s) => write!(f, "{}", s),
             Self::Bool(true) => write!(f, "true"),
             Self::Bool(false) => write!(f, "false"),
             Self::Long(n) => write!(f, "{}", n),
