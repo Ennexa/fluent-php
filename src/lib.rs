@@ -7,7 +7,7 @@ use ext_php_rs::types::{ZendHashTable, Zval};
 use ext_php_rs::{
     info_table_end, info_table_row, info_table_start,
     prelude::*,
-    zend::{ExecutorGlobals, IniEntryDef, ModuleEntry, ce},
+    zend::{ExecutorGlobals, IniEntryDef, IniEntryDefs, ModuleEntry, ce},
 };
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, Range};
@@ -175,7 +175,7 @@ impl From<FluentPhpError> for PhpException {
                     message: message.clone(),
                     errors,
                 };
-                PhpException::default(message).with_object(obj.into_zval(true).unwrap())
+                PhpException::from_message(message).with_object(obj.into_zval(true).unwrap())
             }
             FluentPhpError::ResolverError {
                 errors: fluent_errors,
@@ -186,7 +186,7 @@ impl From<FluentPhpError> for PhpException {
                     message: message.clone(),
                     errors,
                 };
-                PhpException::default(message).with_object(obj.into_zval(true).unwrap())
+                PhpException::from_message(message).with_object(obj.into_zval(true).unwrap())
             }
             _ => PhpException::from_class::<Exception>(message),
         }
@@ -814,31 +814,25 @@ fn parse_ini_bool(s: &str) -> bool {
 }
 
 extern "C" fn module_startup(_type: i32, module_number: i32) -> i32 {
-    IniEntryDef::register(
-        vec![
-            IniEntryDef::new(
-                "fluent.cache_enabled".to_string(),
-                "1".to_string(),
-                &IniEntryPermission::System,
-            ),
-            IniEntryDef::new(
-                "fluent.cache_max_weight".to_string(),
-                "16M".to_string(),
-                &IniEntryPermission::System,
-            ),
-            IniEntryDef::new(
-                "fluent.cache_max_entry_size".to_string(),
-                "2M".to_string(),
-                &IniEntryPermission::System,
-            ),
-            IniEntryDef::new(
-                "fluent.cache_file_validation".to_string(),
-                "metadata".to_string(),
-                &IniEntryPermission::System,
-            ),
-        ],
-        module_number,
-    );
+    static INI: IniEntryDefs<4> = IniEntryDefs::new([
+        IniEntryDef::new(c"fluent.cache_enabled", c"1", IniEntryPermission::System),
+        IniEntryDef::new(
+            c"fluent.cache_max_weight",
+            c"16M",
+            IniEntryPermission::System,
+        ),
+        IniEntryDef::new(
+            c"fluent.cache_max_entry_size",
+            c"2M",
+            IniEntryPermission::System,
+        ),
+        IniEntryDef::new(
+            c"fluent.cache_file_validation",
+            c"metadata",
+            IniEntryPermission::System,
+        ),
+    ]);
+    IniEntryDef::register(INI.as_slice(), module_number);
 
     let ini = ExecutorGlobals::get().ini_values();
 
