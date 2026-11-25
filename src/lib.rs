@@ -814,7 +814,7 @@ fn parse_ini_bool(s: &str) -> bool {
 }
 
 extern "C" fn module_startup(_type: i32, module_number: i32) -> i32 {
-    static INI: IniEntryDefs<4> = IniEntryDefs::new([
+    static INI: IniEntryDefs<5> = IniEntryDefs::new([
         IniEntryDef::new(c"fluent.cache_enabled", c"1", IniEntryPermission::System),
         IniEntryDef::new(
             c"fluent.cache_max_weight",
@@ -831,6 +831,7 @@ extern "C" fn module_startup(_type: i32, module_number: i32) -> i32 {
             c"metadata",
             IniEntryPermission::System,
         ),
+        IniEntryDef::end(),
     ]);
     IniEntryDef::register(INI.as_slice(), module_number);
 
